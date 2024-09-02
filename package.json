@@ -19,7 +19,8 @@
         "morgan": "^1.10.0",
         "mysql2": "^2.3.0",
         "puppeteer": "^22.10.1",
-        "sequelize": "^6.37.3"
+        "sequelize": "^6.37.3",
+        "uuid": "^10.0.0"
     },
     "devDependencies": {
         "nodemon": "^2.0.7"
