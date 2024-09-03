@@ -26,13 +26,23 @@ exports.searchNaverShopping = async (req, res) => {
                 '--disable-infobars',
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', // 메모리 사용량 최적화
+                '--disable-blink-features=AutomationControlled', // 자동화 탐지 비활성화
+                '--start-maximized', // 브라우저를 최대화하여 시작
             ],
         });
 
         const page = await browser.newPage();
-        await page.setViewport({ width: 800, height: 600 }); // 페이지 뷰포트 설정
         // 페이지 로드
         await page.goto(url, { waitUntil: 'networkidle2' });
+
+        const relatedTagsTexts = await page.evaluate(() => {
+            const anchors = document.querySelectorAll('.relatedTags_relation_srh__YG9s7 a');
+            return Array.from(anchors).map((anchor) => anchor.textContent.trim());
+        });
+
+        console.log(relatedTagsTexts);
+
         // 페이지 스크롤
         await autoScroll(page);
 
@@ -112,7 +122,7 @@ async function autoScroll(page) {
                     clearInterval(timer);
                     resolve();
                 }
-            }, 5);
+            }, 50);
         });
     });
 }
@@ -129,10 +139,50 @@ function expandObject(data) {
     const productNum = data[0].productSetFilter.filterValues[0].productCount;
     // 상품 이름 추천
     let words = {};
+    // 사용 태그
+    let tags = {};
+    // 카테고리 번호
+    let cateId = [];
+    // 카테고리 이름
+    let cateNam = [];
     data.forEach((item) => {
         if (item.shoppingResult && item.shoppingResult.products) {
             item.shoppingResult.products.forEach((product) => {
                 const titles = [product.productTitle, product.productName];
+                const manuTag = product.manuTag;
+                // 카테고리 객체 생성
+                const categoryIdObj = {
+                    categoryId1: product.category1Id,
+                    categoryId2: product.category2Id,
+                    categoryId3: product.category3Id,
+                    categoryId4: product.category4Id,
+                };
+
+                const categoryNameObj = {
+                    categoryNm1: product.category1Name,
+                    categoryNm2: product.category2Name,
+                    categoryNm3: product.category3Name,
+                    categoryNm4: product.category4Name,
+                };
+
+                // 중복된 카테고리 ID가 없을 경우에만 추가
+                if (!cateId.some((id) => JSON.stringify(id) === JSON.stringify(categoryIdObj))) {
+                    cateId.push(categoryIdObj);
+                }
+
+                // 중복된 카테고리 이름이 없을 경우에만 추가
+                if (!cateNam.some((name) => JSON.stringify(name) === JSON.stringify(categoryNameObj))) {
+                    cateNam.push(categoryNameObj);
+                }
+
+                if (manuTag) {
+                    manuTag.split(',').forEach((tag) => {
+                        const cleanedWord = tag.replace(/[^\w가-힣]/g, '').toLowerCase(); // 특수문자를 제거하고 소문자로 변환
+                        if (cleanedWord) {
+                            tags[cleanedWord] = (tags[cleanedWord] || 0) + 1;
+                        }
+                    });
+                }
                 titles.forEach((title) => {
                     if (title) {
                         title.split(/\s+/).forEach((word) => {
@@ -150,23 +200,7 @@ function expandObject(data) {
         .sort((a, b) => b[1] - a[1])
         .map((entry) => entry[0]);
 
-    // 사용 태그
-    let tags = {};
-    data.forEach((item) => {
-        if (item.shoppingResult && item.shoppingResult.products) {
-            item.shoppingResult.products.forEach((product) => {
-                const manuTag = product.manuTag;
-                if (manuTag) {
-                    manuTag.split(',').forEach((tag) => {
-                        const cleanedWord = tag.replace(/[^\w가-힣]/g, '').toLowerCase(); // 특수문자를 제거하고 소문자로 변환
-                        if (cleanedWord) {
-                            tags[cleanedWord] = (tags[cleanedWord] || 0) + 1;
-                        }
-                    });
-                }
-            });
-        }
-    });
+    // 추천 category 매칭
 
     const productTags = Object.entries(tags)
         .sort((a, b) => b[1] - a[1])
@@ -180,5 +214,7 @@ function expandObject(data) {
         productNum,
         productName,
         productTags,
+        cateId,
+        cateNam,
     };
 }
