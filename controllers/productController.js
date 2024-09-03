@@ -49,7 +49,6 @@ exports.getProductData = async (req, res) => {
         // 제품 데이터를 가져옴
         const products = await productModel.getSearchWordData(data);
         let { searchResult, total } = products;
-        console.log(products);
 
         // 제품 데이터에 썸네일 데이터를 병합
         let productsData = await Promise.all(

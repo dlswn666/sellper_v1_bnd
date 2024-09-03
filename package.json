@@ -19,7 +19,10 @@
         "morgan": "^1.10.0",
         "mysql2": "^2.3.0",
         "puppeteer": "^22.10.1",
+        "puppeteer-extra": "^3.3.6",
+        "puppeteer-extra-plugin-stealth": "^2.11.2",
         "sequelize": "^6.37.3",
+        "user-agents": "^1.1.315",
         "uuid": "^10.0.0"
     },
     "devDependencies": {

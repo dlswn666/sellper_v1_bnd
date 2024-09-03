@@ -1,7 +1,6 @@
 const db = require('../config/db');
 const { Sequelize } = require('sequelize');
 const { v4: uuid4 } = require('uuid');
-const sequelize = require('../config/db');
 
 exports.getProducts = async (data) => {
     const { search, offset, limit } = data;
@@ -161,11 +160,11 @@ exports.getSearchWordData = async (data) => {
                 on wp.wholesale_site_id = wsi.wholesale_site_id  
             ${condition}
             ORDER BY 
-                wp.product_name asc,
                 CASE 
                     WHEN p.search_word IS NOT NULL AND p.search_word != '' THEN 1
                     ELSE 0
-                END ASC
+                END ASC,
+                wp.product_name asc
             LIMIT :limit OFFSET :offset
         `;
 

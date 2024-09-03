@@ -2,6 +2,13 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
+// 많이 사용되는 모니터 해상도 배열
+const monitorSizes = ['1920x1080', '1366x768', '1440x900', '1536x864', '1280x720'];
+
+// 랜덤으로 선택된 모니터 해상도
+const randomSize = monitorSizes[Math.floor(Math.random() * monitorSizes.length)];
+const [width, height] = randomSize.split('x').map(Number);
+
 exports.searchNaverShopping = async (req, res) => {
     const query = req.query.q;
 
@@ -15,7 +22,7 @@ exports.searchNaverShopping = async (req, res) => {
         const browser = await puppeteer.launch({
             headless: false, // headless 모드 비활성화
             args: [
-                '--window-size=800,600', // 브라우저 창 크기 설정
+                `--window-size=${randomSize}`, // 브라우저 창 크기 설정
                 '--disable-infobars',
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
