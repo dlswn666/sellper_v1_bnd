@@ -98,18 +98,18 @@ exports.putWorkingProduct = async (data) => {
 };
 
 exports.getSearchWordData = async (data) => {
-    const { productName, offset, limit } = data;
+    const { search, offset, limit } = data;
 
     try {
         let replacements = {};
         let condition = '';
 
-        if (productName) {
+        if (search) {
             condition += ` WHERE wp.product_name LIKE :productName`;
-            replacements.productName = `%${productName}%`;
+            replacements.productName = `%${search}%`;
         }
-        replacements.offset = parseInt(offset, 10); // offset을 정수로 변환
-        replacements.limit = parseInt(limit, 10); // limit을 정수로 변환
+        replacements.offset = parseInt(offset, 10);
+        replacements.limit = parseInt(limit, 10);
 
         let query = `
             SELECT 
@@ -128,10 +128,10 @@ exports.getSearchWordData = async (data) => {
             LEFT OUTER JOIN wholesale_product wp 
                 ON wp.wholesale_product_id = p.wholesale_product_id
             left outer join wholesale_site_info wsi
-	            on wp.wholesale_site_id = wsi.wholesale_site_id  
-                ${condition}
+                on wp.wholesale_site_id = wsi.wholesale_site_id  
+            ${condition}
             ORDER BY 
-            	wp.product_name asc,
+                wp.product_name asc,
                 CASE 
                     WHEN p.search_word IS NOT NULL AND p.search_word != '' THEN 1
                     ELSE 0
@@ -139,14 +139,30 @@ exports.getSearchWordData = async (data) => {
             LIMIT :limit OFFSET :offset
         `;
 
-        const result = await db.query(query, {
+        const dataQuery = await db.query(query, {
             replacements,
             type: Sequelize.QueryTypes.SELECT,
         });
 
-        return result;
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM products p
+            LEFT OUTER JOIN wholesale_product wp 
+                ON wp.wholesale_product_id = p.wholesale_product_id
+            ${condition}
+        `;
+
+        const totalCountResult = await db.query(countQuery, {
+            replacements,
+            type: Sequelize.QueryTypes.SELECT,
+        });
+
+        return {
+            searchResult: dataQuery,
+            total: totalCountResult[0].total,
+        };
     } catch (error) {
-        console.error('Error occure getSearchWordData : ', error);
+        console.error('Error occurred in getSearchWordData: ', error);
         throw error;
     }
 };
@@ -176,6 +192,14 @@ exports.getThumbNailData = async (productId) => {
     } catch (error) {
         console.error('Error executing query:', error);
         throw error;
+    }
+};
+
+exports.postSearchWord = async (data) => {
+    try {
+        const query = ``;
+    } catch (error) {
+        console.log('postSearchWord error executing query : ', error);
     }
 };
 
