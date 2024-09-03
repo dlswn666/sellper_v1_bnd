@@ -1,8 +1,17 @@
 const productModel = require('../models/productModel');
 
 exports.getSelectProductData = async (req, res) => {
+    const { search = '', limit = 50, page = 1 } = req.query;
+
+    const data = {
+        search,
+        offset: (page - 1) * limit,
+        limit: parseInt(limit, 10),
+        page: parseInt(page, 10),
+    };
+
     try {
-        let product = await productModel.getProducts(req.params.productName);
+        let product = await productModel.getProducts(data);
 
         res.status(200).json(product);
     } catch (err) {

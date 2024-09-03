@@ -3,15 +3,19 @@ const { Sequelize } = require('sequelize');
 const { v4: uuid4 } = require('uuid');
 const sequelize = require('../config/db');
 
-exports.getProducts = async (productName) => {
+exports.getProducts = async (data) => {
+    const { search, offset, limit } = data;
     try {
         let replacements = {};
         let condition = '';
 
-        if (productName) {
+        if (search) {
             condition += ` WHERE wp.product_name LIKE :productName`;
-            replacements.productName = `%${productName}%`;
+            replacements.productName = `%${search}%`;
         }
+
+        replacements.offset = parseInt(offset, 10);
+        replacements.limit = parseInt(limit, 10);
 
         let query = `
             SELECT 
@@ -38,14 +42,39 @@ exports.getProducts = async (productName) => {
             ON wp.wholesale_product_id = p.wholesale_product_id
         ${condition}
         ORDER BY p.workingCnt ASC
+        LIMIT :limit OFFSET :offset
         `;
 
-        const products = await db.query(query, {
+        const dataQuery = await db.query(query, {
             replacements,
             type: Sequelize.QueryTypes.SELECT,
         });
 
-        return products;
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM wholesale_product wp
+             LEFT OUTER JOIN wholesale_site_info wsi 
+            ON wp.wholesale_site_id = wsi.wholesale_site_id
+        LEFT OUTER JOIN (
+            SELECT 
+                wholesale_product_id, 
+                COUNT(*) AS workingCnt
+            FROM products
+            GROUP BY wholesale_product_id
+        ) p
+            ON wp.wholesale_product_id = p.wholesale_product_id
+        ${condition}
+        `;
+
+        const totalCountResult = await db.query(countQuery, {
+            replacements,
+            type: Sequelize.QueryTypes.SELECT,
+        });
+
+        return {
+            result: dataQuery,
+            total: totalCountResult[0].total,
+        };
     } catch (error) {
         console.error('Error executing query:', error);
         throw error;
