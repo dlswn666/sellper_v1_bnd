@@ -73,13 +73,10 @@ exports.getSearchWord = async (req, res) => {
 
 exports.postSearchWord = async (req, res) => {
     const data = req.body;
+    console.log(data);
     try {
-        if (data) {
-            data.map(async (item) => {
-                await productModel.postSearchWord(item);
-            });
-        }
-        res.status(200).json({ message: '저장이 완료 되었습니다.' });
+        const result = await productModel.postSearchWord(data);
+        res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

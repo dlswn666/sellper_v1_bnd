@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const { Sequelize } = require('sequelize');
 const { v4: uuid4 } = require('uuid');
+const sequelize = require('../config/db');
 
 exports.getProducts = async (productName) => {
     try {
@@ -196,9 +197,58 @@ exports.getThumbNailData = async (productId) => {
 };
 
 exports.postSearchWord = async (data) => {
+    const t = await db.transaction();
+    const { id, preValue, curValue } = data;
+
     try {
-        const query = ``;
+        const postQuery = `update products 
+                    set search_word = :curValue
+                    where id = :id`;
+        let postReplacements = {};
+        postReplacements.curValue = curValue;
+        postReplacements.id = id;
+
+        await db.query(postQuery, {
+            replacements: postReplacements,
+            type: Sequelize.QueryTypes.UPDATE,
+            transaction: t,
+        });
+
+        await db.query(
+            `
+                INSERT INTO selper.products_his
+                (id, stage, pre_value, cur_value, update_dt, update_user)
+                VALUES(:id, 'SW', :preValue, :curValue, CURRENT_TIMESTAMP, 'selper');
+            `,
+            {
+                replacements: {
+                    id,
+                    preValue,
+                    curValue,
+                },
+                type: Sequelize.QueryTypes.INSERT,
+                transaction: t,
+            }
+        );
+
+        const searchResult = await db.query(
+            `
+                select search_word from products where id = :id
+            `,
+            {
+                replacements: {
+                    id,
+                },
+                type: Sequelize.QueryTypes.SELECT,
+                transaction: t,
+            }
+        );
+
+        t.commit();
+
+        return searchResult;
     } catch (error) {
+        t.rollback();
         console.log('postSearchWord error executing query : ', error);
     }
 };
