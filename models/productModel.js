@@ -75,14 +75,13 @@ exports.getProducts = async (data) => {
             total: totalCountResult[0].total,
         };
     } catch (error) {
-        console.error('Error executing query:', error);
+        console.error('Error executing getProducts query:', error);
         throw error;
     }
 };
 
 exports.putWorkingProduct = async (data) => {
-    const productsUuid = uuid4();
-    const { productId } = data;
+    const { productsUuid, productId, chargeParam } = data;
 
     // 트랜잭션 시작
     const t = await db.transaction();
@@ -123,6 +122,13 @@ exports.putWorkingProduct = async (data) => {
         t.rollback();
         console.error('Error executing putWorkingProduct query : ', error);
         throw error;
+    }
+};
+
+exports.postWorkingProductPrice = async (data) => {
+    try {
+    } catch (error) {
+        console.error('Error executing putWorkingProductPrice query:', error);
     }
 };
 
@@ -321,6 +327,53 @@ exports.getDetailImageData = async (productId) => {
         return dtlImgData;
     } catch (error) {
         console.error('Error executing query:', error);
+        throw error;
+    }
+};
+
+exports.getPlatformCharge = async () => {
+    try {
+        const platformChargeData = await db.query(
+            `
+                SELECT id, 
+	            platform_name, 
+	            platform_url, 
+	            platform_info,
+	            charge_rate
+                FROM selper.platform_info;
+            `,
+            {
+                type: Sequelize.QueryTypes.SELECT,
+            }
+        );
+        return platformChargeData;
+    } catch (error) {
+        console.error('Error executing query : ', error);
+        throw error;
+    }
+};
+
+exports.putPlatformPrice = async (data) => {
+    const { productsUuid, platformId, price } = data;
+    const uuid = uuid4();
+    try {
+        let query = `
+            INSERT INTO selper.platform_price
+            (id, products_id, platform_id, price)
+            VALUES(:uuid, :productsUuid, :platformId, :price);
+        `;
+        const replacements = {
+            uuid,
+            productsUuid,
+            platformId,
+            price,
+        };
+        await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.INSERT,
+        });
+    } catch (error) {
+        console.error('Error executing query : ', error);
         throw error;
     }
 };
