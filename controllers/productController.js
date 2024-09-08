@@ -35,43 +35,62 @@ exports.putWorkingData = async (req, res) => {
                 const platformChargeData = await productModel.getPlatformCharge();
                 const targetProfitRatio = 0.3; // 순이익 비율 (30%)
                 const taxRatio = 0.16; // 세금 비율 (16%)
+                const discountRatio = 0.3;
 
                 // 플랫폼별 판매 가격 설정
                 await Promise.all(
                     platformChargeData.map(async (data) => {
-                        let feeRatioString = data.charge_rate; // '6%' 같은 형식의 문자열
-                        let feeRatio = parseFloat(feeRatioString.replace('%', '')) / 100; // '%'를 제거하고 소수로 변환
-                        const productPriceString = item.productPrice;
-                        let productPrice = parseInt(productPriceString.replace('원', ''), 10);
-                        let sellingPrice = productPrice / (1 - feeRatio - targetProfitRatio * (1 - taxRatio));
-                        const platformId = data.id;
-                        console.log(sellingPrice);
-                        console.log(data);
-                        let price = Math.ceil(sellingPrice / 100) * 100; // 100원 단위로 올림 처리
-                        console.log(price);
-                        price = price.toString();
-                        // 각 플랫폼에 맞는 가격 데이터 생성
-                        const paramData = {
-                            productsUuid,
-                            platformId,
-                            price,
-                        };
+                        try {
+                            let feeRatioString = data.charge_rate; // '6%' 같은 형식의 문자열
+                            let feeRatio = parseFloat(feeRatioString.replace('%', '')) / 100; // '%'를 제거하고 소수로 변환
+                            const productPriceString = item.productPrice;
+                            console.log(productPriceString);
+                            let productPrice = parseInt(productPriceString.replace('원', '').replace(',', ''), 10);
+                            console.log(productPrice);
 
-                        // 비동기 작업 - 플랫폼 가격 정보 저장
-                        await productModel.putPlatformPrice(paramData);
+                            const margin_price = Math.ceil((productPrice * targetProfitRatio) / 100) * 100;
+                            const tax_price = parseInt(productPrice * taxRatio);
+                            const platForm_price = parseInt((margin_price + tax_price) * feeRatio);
+
+                            const discount_price =
+                                Math.ceil((productPrice + margin_price + tax_price + platForm_price) / 100) * 100;
+
+                            const price =
+                                Math.ceil(
+                                    (productPrice + margin_price + tax_price + platForm_price + discount_price) / 100
+                                ) * 100;
+
+                            const platformId = data.id;
+
+                            // 각 플랫폼에 맞는 가격 데이터 생성
+                            const paramData = {
+                                productsUuid,
+                                platformId,
+                                price,
+                                targetProfitRatio,
+                                margin_price,
+                                taxRatio,
+                                tax_price,
+                                feeRatio,
+                                platForm_price,
+                                discount_price,
+                            };
+
+                            // 비동기 작업 - 플랫폼 가격 정보 저장
+                            await productModel.putPlatformPrice(paramData);
+                        } catch (err) {
+                            console.error(`Platform ${platformData.id} 가격 계산 실패: `, err);
+                        }
                     })
                 );
-
-                // 결과 반환
-                return result;
             }
         }
         // 저장 성공 시 응답
-        res.status(200).json({ message: '저장이 완료 되었습니다.' });
+        return res.status(200).json({ message: '저장이 완료 되었습니다.' });
     } catch (error) {
         // 오류 처리
         console.error('Error occure putWorkingData: ', error);
-        res.status(500).json({ message: '저장에 실패하였습니다.' });
+        return res.status(500).json({ message: '저장에 실패하였습니다.' });
     }
 };
 

@@ -354,19 +354,49 @@ exports.getPlatformCharge = async () => {
 };
 
 exports.putPlatformPrice = async (data) => {
-    const { productsUuid, platformId, price } = data;
+    const {
+        productsUuid,
+        platformId,
+        price,
+        targetProfitRatio,
+        margin_price,
+        taxRatio,
+        tax_price,
+        feeRatio,
+        platForm_price,
+        discount_price,
+    } = data;
     const uuid = uuid4();
     try {
         let query = `
-            INSERT INTO selper.platform_price
-            (id, products_id, platform_id, price)
-            VALUES(:uuid, :productsUuid, :platformId, :price);
+           INSERT INTO selper.platform_price
+            (id, 
+            products_id, 
+            platform_id, 
+            price, 
+            margin_percent, 
+            margin_price, 
+            tax_percent, 
+            tax_price, 
+            create_dt, 
+            platform_percent, 
+            platform_price,
+            discount_price)
+            VALUES(:uuid, :productsUuid, :platformId, :price, :targetProfitRatio, 
+                    :margin_price, :taxRatio, :tax_price, CURRENT_TIMESTAMP, :feeRatio, :platForm_price, :discount_price)
         `;
         const replacements = {
             uuid,
             productsUuid,
             platformId,
             price,
+            targetProfitRatio,
+            margin_price,
+            taxRatio,
+            tax_price,
+            feeRatio,
+            platForm_price,
+            discount_price,
         };
         await db.query(query, {
             replacements,
