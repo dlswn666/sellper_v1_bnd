@@ -1,5 +1,8 @@
 const productModel = require('../models/productModel');
 const { v4: uuid4 } = require('uuid');
+const Queue = require('bull');
+const naverSearch = new Queue('naverSearch', 'redis://127.0.0.1:6379');
+
 exports.getSelectProductData = async (req, res) => {
     const { search = '', limit = 50, page = 1 } = req.query;
 
@@ -44,16 +47,16 @@ exports.putWorkingData = async (req, res) => {
                             let feeRatioString = data.charge_rate; // '6%' 같은 형식의 문자열
                             let feeRatio = parseFloat(feeRatioString.replace('%', '')) / 100; // '%'를 제거하고 소수로 변환
                             const productPriceString = item.productPrice;
-                            console.log(productPriceString);
                             let productPrice = parseInt(productPriceString.replace('원', '').replace(',', ''), 10);
-                            console.log(productPrice);
 
                             const margin_price = Math.ceil((productPrice * targetProfitRatio) / 100) * 100;
                             const tax_price = parseInt(productPrice * taxRatio);
                             const platForm_price = parseInt((margin_price + tax_price) * feeRatio);
 
                             const discount_price =
-                                Math.ceil((productPrice + margin_price + tax_price + platForm_price) / 100) * 100;
+                                Math.ceil(
+                                    ((productPrice + margin_price + tax_price + platForm_price) * discountRatio) / 100
+                                ) * 100;
 
                             const price =
                                 Math.ceil(
@@ -143,6 +146,13 @@ exports.postSearchWord = async (req, res) => {
     console.log(data);
     try {
         const result = await productModel.postSearchWord(data);
+        // 큐에 작업을 추가 (여기에서 추가)
+        await naverSearch.add(
+            {
+                data,
+            },
+            { attempts: 3, delay: 5000 } // 옵션을 하나의 객체로 병합
+        );
         res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
     } catch (err) {
         res.status(500).json({ error: err.message });

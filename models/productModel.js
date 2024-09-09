@@ -407,3 +407,37 @@ exports.putPlatformPrice = async (data) => {
         throw error;
     }
 };
+
+exports.putAutoReco = async (data) => {
+    const { id, productName, productTags, cateId, cateNam } = data;
+    const uuid = uuid4();
+    try {
+        let query = `
+           REPLACE INTO selper.auto_recommend
+            (id, 
+            product_id, 
+            reco_cate, 
+            reco_productNm, 
+            reco_keyword, 
+            create_dt, 
+            reco_cate_id, 
+            reco_tag)
+            VALUES(:uuid, :id, :cateNam, :productName, '', CURRENT_TIMESTAMP, :cateId, :productTags);
+        `;
+        const replacements = {
+            uuid,
+            id,
+            productName,
+            productTags,
+            cateId,
+            cateNam,
+        };
+        await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.INSERT,
+        });
+    } catch (error) {
+        console.error('Error executing query : ', error);
+        throw error;
+    }
+};
