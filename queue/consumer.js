@@ -3,6 +3,17 @@ const naverSearch = new Queue('naverSearch', 'redis://127.0.0.1:6379');
 const { searchNaverShopping } = require('../service/searchNaverShopping');
 const productModel = require('../models/productModel');
 
+const db = require('../config/db');
+
+(async () => {
+    try {
+        const [rows] = await db.query('SELECT 1'); // 간단한 쿼리 실행
+        console.log('DB 연결 성공:', rows);
+    } catch (error) {
+        console.error('DB 연결 실패:', error);
+    }
+})();
+
 // 큐에서 작업을 처리
 naverSearch.process(async (job) => {
     const { data } = job.data;

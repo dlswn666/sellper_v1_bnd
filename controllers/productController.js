@@ -1,7 +1,7 @@
 const productModel = require('../models/productModel');
 const { v4: uuid4 } = require('uuid');
 const Queue = require('bull');
-const naverSearch = new Queue('naverSearch', 'redis://127.0.0.1:6379');
+const addSearchJob = require('../queue/producer');
 
 exports.getSelectProductData = async (req, res) => {
     const { search = '', limit = 50, page = 1 } = req.query;
@@ -146,13 +146,8 @@ exports.postSearchWord = async (req, res) => {
     console.log(data);
     try {
         const result = await productModel.postSearchWord(data);
-        // 큐에 작업을 추가 (여기에서 추가)
-        await naverSearch.add(
-            {
-                data,
-            },
-            { attempts: 3, delay: 5000 } // 옵션을 하나의 객체로 병합
-        );
+
+        addSearchJob(data);
         res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
     } catch (err) {
         res.status(500).json({ error: err.message });
