@@ -90,7 +90,7 @@ exports.putWorkingProduct = async (data) => {
         await db.query(
             `
             INSERT INTO selper.products
-                (id, wholesale_product_id, create_user, create_dt)
+                (product_id, wholesale_product_id, create_user, create_dt)
                 VALUES(:productsUuid, :productId,'selper', CURRENT_TIMESTAMP);
         `,
             {
@@ -105,7 +105,7 @@ exports.putWorkingProduct = async (data) => {
         await db.query(
             `
                 INSERT INTO selper.products_his
-                (id, stage, update_dt, update_user)
+                (product_his_id, stage, update_dt, update_user)
                 VALUES(:productsUuid, 'ST', CURRENT_TIMESTAMP, 'selper');
             `,
             {
@@ -148,7 +148,7 @@ exports.getSearchWordData = async (data) => {
 
         let query = `
             SELECT 
-                p.id AS workingProductId,
+                p.product_id AS workingProductId,
                 p.wholesale_product_id AS productId,
                 p.search_word AS searchWord,
                 wp.wholesale_site_id AS siteId,
@@ -237,7 +237,7 @@ exports.postSearchWord = async (data) => {
     try {
         const postQuery = `update products 
                     set search_word = :curValue
-                    where id = :id`;
+                    where product_id = :id`;
         let postReplacements = {};
         postReplacements.curValue = curValue;
         postReplacements.id = id;
@@ -251,7 +251,7 @@ exports.postSearchWord = async (data) => {
         await db.query(
             `
                 INSERT INTO selper.products_his
-                (id, stage, pre_value, cur_value, update_dt, update_user)
+                (product_his_id, stage, pre_value, cur_value, update_dt, update_user)
                 VALUES(:id, 'SW', :preValue, :curValue, CURRENT_TIMESTAMP, 'selper');
             `,
             {
@@ -267,7 +267,7 @@ exports.postSearchWord = async (data) => {
 
         const searchResult = await db.query(
             `
-                select search_word from products where id = :id
+                select search_word from products where product_id = :id
             `,
             {
                 replacements: {
@@ -370,8 +370,8 @@ exports.putPlatformPrice = async (data) => {
     try {
         let query = `
            INSERT INTO selper.platform_price
-            (id, 
-            products_id, 
+            (platform_pricd_id, 
+            product_id, 
             platform_id, 
             price, 
             margin_percent, 
@@ -410,22 +410,19 @@ exports.putPlatformPrice = async (data) => {
 
 exports.putAutoReco = async (data) => {
     const { id, productName, productTags, cateId, cateNam } = data;
-    const uuid = uuid4();
     try {
         let query = `
            REPLACE INTO selper.auto_recommend
-            (id, 
-            product_id, 
+            (product_id, 
             reco_cate, 
             reco_productNm, 
             reco_keyword, 
             create_dt, 
             reco_cate_id, 
             reco_tag)
-            VALUES(:uuid, :id, :cateNam, :productName, '', CURRENT_TIMESTAMP, :cateId, :productTags);
+            VALUES(:id, :cateNam, :productName, '', CURRENT_TIMESTAMP, :cateId, :productTags);
         `;
         const replacements = {
-            uuid,
             id,
             productName,
             productTags,
