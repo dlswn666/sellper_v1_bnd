@@ -441,3 +441,58 @@ exports.putAutoReco = async (data) => {
         throw error;
     }
 };
+
+exports.getAutoReco = async (data) => {
+    console.log(data);
+    const { search, limit, offset } = data;
+    try {
+        let query = `
+           select wp.wholesale_site_id as siteId,
+                  wp.product_code as productCode,
+                  wp.wholesale_product_id as wholeProductId,
+                  wp.product_name as wholeProductName,
+                  CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
+                  CONCAT(FORMAT(p.product_price, 0), ' 원') AS productPrice,
+                  wp.detail_page_url as detailpageUrl,
+                  p.search_word as searchWord,
+                  ar.reco_productNm as recoProductNm,
+                  ar.reco_keyword as recoKeyword,
+                  ar.reco_tag as recoTag,
+                  p.product_name as productName,
+                  wsi.site_name as siteName,
+	              wsi.site_url as siteUrl,
+                  (select count(*) 
+                   from auto_recommend ar
+                   left outer join products p 
+                   on p.id = ar.product_id
+                   left outer join wholesale_product wp 
+                   on wp.wholesale_product_id = p.wholesale_product_id
+                  ) as total_count
+          from auto_recommend ar
+          left outer join products p 
+          on p.id = ar.product_id
+          left outer join wholesale_product wp 
+          on wp.wholesale_product_id = p.wholesale_product_id
+          left outer join wholesale_site_info wsi 
+          on wp.wholesale_site_id = wsi.wholesale_site_id 
+          order by 
+              case 
+                  when p.product_name is not null and p.product_name != '' then 1
+                  else 0
+              end asc
+           LIMIT :limit OFFSET :offset   
+        `;
+        const replacements = {
+            limit,
+            offset,
+        };
+        const result = await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.SELECT,
+        });
+        return result;
+    } catch (error) {
+        console.error('Error executing query : ', error);
+        throw error;
+    }
+};

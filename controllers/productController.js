@@ -147,8 +147,38 @@ exports.postSearchWord = async (req, res) => {
     try {
         const result = await productModel.postSearchWord(data);
 
-        addSearchJob(data);
+        // addSearchJob(data);
         res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+exports.searchAutoReco = async (req, res) => {
+    const { search = '', limit = 50, page = 1 } = req.query;
+
+    const data = {
+        search,
+        offset: (page - 1) * limit,
+        limit: parseInt(limit, 10),
+        page: parseInt(page, 10),
+    };
+
+    try {
+        let searchResult = await productModel.getAutoReco(data);
+
+        let productsData = await Promise.all(
+            searchResult.map(async (product) => {
+                let thumbnail = await productModel.getThumbNailData(product.wholeProductId);
+                return {
+                    ...product,
+                    thumbnail,
+                };
+            })
+        );
+
+        console.log(productsData);
+        res.status(200).json(productsData);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

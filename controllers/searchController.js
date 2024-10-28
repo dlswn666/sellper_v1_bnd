@@ -1,6 +1,8 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+const searchModel = require('../models/searchModel');
+const searchNaverShopping = require('../service/searchNaverShopping');
 
 // 많이 사용되는 모니터 해상도 배열
 const monitorSizes = ['1920x1080', '1366x768', '1440x900', '1536x864', '1280x720'];
@@ -218,3 +220,31 @@ function expandObject(data) {
         cateNam,
     };
 }
+
+exports.postAutoReco = async () => {
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    // 우선 검색어 등록된 데이터 중 auto_recommend DB 와 mapping 안된 데이터 검색해서 검색어 return
+    try {
+        // searchWord 배열 가져오기
+        const searchWords = await searchModel.getSearchWord();
+
+        // 각 searchWord에 대해 순차적으로 searchNaverShopping 실행
+        for (const { id, searchWord } of searchWords) {
+            console.log(`Processing search word: ${searchWord}`);
+
+            // Naver 쇼핑 검색 호출
+            let resultData = await searchNaverShopping.searchNaverShopping(searchWord);
+            resultData.id = id;
+
+            await searchModel.putAutoReco(resultData);
+
+            // 5초 딜레이 적용
+            await delay(5000);
+        }
+    } catch (error) {
+        console.error('Error during search processing:', error);
+    }
+
+    // 검색어 순회 하면서 searchNaverShopping 호출 ( 간격 5초 )
+    // 결과 저장
+};

@@ -12,13 +12,16 @@ const [width, height] = randomSize.split('x').map(Number);
 // 사람처럼 랜덤 대기 시간을 설정하는 함수
 const randomWait = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
+const waitForTimeout = (ms) => {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
 // 함수 형태로 변경
-const searchNaverShopping = async (query) => {
-    if (!query) {
+const searchNaverShopping = async (data) => {
+    if (!data) {
         throw new Error('Query parameter is required');
     }
-    const { id, perValue, curValue } = query;
-    const url = `https://search.shopping.naver.com/search/all?query=${curValue}`;
+    const url = `https://search.shopping.naver.com/search/all?query=${data}`;
 
     try {
         const browser = await puppeteer.launch({
@@ -38,15 +41,15 @@ const searchNaverShopping = async (query) => {
 
         // 브라우저 크기 설정 및 사용자 에이전트 변경 (사람처럼 보이게 하기 위해)
         await page.setViewport({ width, height });
-        await page.setUserAgent(
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        );
+        // await page.setUserAgent(
+        //     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        // );
 
         // 페이지 로드
         await page.goto(url, { waitUntil: 'networkidle2' });
 
         // 랜덤한 대기 시간을 추가하여 더 사람처럼 보이게 만들기
-        await page.waitForTimeout(randomWait(500, 1500)); // 0.5초 ~ 1.5초 대기
+        // await waitForTimeout(randomWait(500, 1500));
 
         // 검색 결과 페이지에서 랜덤으로 마우스 이동
         await moveMouseRandomly(page);
@@ -71,14 +74,18 @@ const searchNaverShopping = async (query) => {
             '#content > div.style_content__xWg5l > div.pagination_pagination__fsf34 > div > a:nth-child(3)',
         ];
 
+        await page.click(
+            '#content > div.style_content__xWg5l > div.pagination_pagination__fsf34 > div > a:nth-child(3)'
+        );
+
         // 랜덤한 대기 시간 추가 (더 자연스럽게 보이기 위해)
-        await page.waitForTimeout(randomWait(1000, 2000));
+        // await waitForTimeout(randomWait(500, 1500));
 
         // 페이지 이동
         for (let button of paginationButtons) {
             await autoScroll(page);
             await page.click(button);
-            await page.waitForTimeout(randomWait(1500, 2500)); // 클릭 후 대기
+            // await waitForTimeout(randomWait(500, 1500)); // 클릭 후 대기
             const pageData = await getPageData(page);
             allData.push(pageData);
         }
@@ -129,7 +136,7 @@ async function autoScroll(page) {
     await page.evaluate(async () => {
         await new Promise((resolve) => {
             let totalHeight = 0;
-            const distance = 100; // 스크롤을 더 짧은 거리로
+            const distance = 900;
             const timer = setInterval(() => {
                 const scrollHeight = document.body.scrollHeight;
                 window.scrollBy(0, distance);
@@ -139,11 +146,10 @@ async function autoScroll(page) {
                     clearInterval(timer);
                     resolve();
                 }
-            }, randomWait(50, 150)); // 스크롤 딜레이를 랜덤하게 설정
+            }, 50);
         });
     });
 }
-
 // 페이지 내에서 마우스를 랜덤하게 움직이는 함수
 async function moveMouseRandomly(page) {
     const randomX = Math.floor(Math.random() * width);
@@ -160,7 +166,7 @@ async function saveToFile(data, fileName) {
 
 function expandObject(data) {
     // 상품 수
-    const productNum = data[0].productSetFilter.filterValues[0].productCount;
+    const productNum = data[0].productSetFilter.filterValues[0].productCount.toString(); // 숫자를 문자열로 변환
     // 상품 이름 추천
     let words = {};
     // 사용 태그
@@ -169,6 +175,7 @@ function expandObject(data) {
     let cateId = [];
     // 카테고리 이름
     let cateNam = [];
+
     data.forEach((item) => {
         if (item.shoppingResult && item.shoppingResult.products) {
             item.shoppingResult.products.forEach((product) => {
@@ -220,15 +227,18 @@ function expandObject(data) {
             });
         }
     });
+
+    // productName 배열을 문자열로 변환 (콤마로 구분)
     const productName = Object.entries(words)
         .sort((a, b) => b[1] - a[1])
-        .map((entry) => entry[0]);
+        .map((entry) => entry[0])
+        .join(', '); // 배열을 문자열로 변환
 
-    // 추천 category 매칭
-
+    // productTags 배열을 문자열로 변환 (콤마로 구분)
     const productTags = Object.entries(tags)
         .sort((a, b) => b[1] - a[1])
-        .map((entry) => entry[0]);
+        .map((entry) => entry[0])
+        .join(', '); // 배열을 문자열로 변환
 
     console.log('productNum', productNum);
     console.log('productName', productName);
@@ -237,11 +247,11 @@ function expandObject(data) {
     console.log('cateNam', cateNam);
 
     return {
-        productNum, // 총 상품 수
-        productName, // 추천 이름
-        productTags, // 추천 태그
-        cateId, // 카테고리 ID
-        cateNam, // 카테고리
+        productNum, // 총 상품 수 (문자열)
+        productName, // 추천 이름 (문자열)
+        productTags, // 추천 태그 (문자열)
+        cateId, // 카테고리 ID (배열)
+        cateNam, // 카테고리 (배열)
     };
 }
 
