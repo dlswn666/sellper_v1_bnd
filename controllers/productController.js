@@ -143,7 +143,6 @@ exports.getSearchWord = async (req, res) => {
 
 exports.postSearchWord = async (req, res) => {
     const data = req.body;
-    console.log(data);
     try {
         const result = await productModel.postSearchWord(data);
 
