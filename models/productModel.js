@@ -461,13 +461,13 @@ exports.getAutoReco = async (data) => {
                   (select count(*) 
                    from auto_recommend ar
                    left outer join products p 
-                   on p.id = ar.product_id
+                   on p.product_id = ar.product_id
                    left outer join wholesale_product wp 
                    on wp.wholesale_product_id = p.wholesale_product_id
                   ) as total_count
           from auto_recommend ar
           left outer join products p 
-          on p.id = ar.product_id
+          on p.product_id = ar.product_id
           left outer join wholesale_product wp 
           on wp.wholesale_product_id = p.wholesale_product_id
           left outer join wholesale_site_info wsi 
