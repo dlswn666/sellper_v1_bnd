@@ -182,3 +182,8 @@ exports.searchAutoReco = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
+exports.putProductName = async (req, res) => {
+    console.log(req);
+    console.log(res);
+};

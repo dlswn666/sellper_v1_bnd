@@ -9,5 +9,6 @@ router.get('/getWorkingData', productController.getProductData);
 router.get('/searchWord/:productId', productController.getSearchWord);
 router.post('/postSearchWord', productController.postSearchWord);
 router.get('/getAutoReco', productController.searchAutoReco);
+router.put('/putProductName', productController.putProductName);
 
 module.exports = router;
