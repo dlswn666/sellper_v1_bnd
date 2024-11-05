@@ -175,8 +175,6 @@ exports.searchAutoReco = async (req, res) => {
                 };
             })
         );
-
-        console.log(productsData);
         res.status(200).json(productsData);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -184,6 +182,12 @@ exports.searchAutoReco = async (req, res) => {
 };
 
 exports.putProductName = async (req, res) => {
-    console.log(req);
-    console.log(res);
+    const data = req.body;
+    try {
+        const result = await productModel.putProductName(data);
+
+        res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 };

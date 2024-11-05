@@ -440,7 +440,6 @@ exports.putAutoReco = async (data) => {
 };
 
 exports.getAutoReco = async (data) => {
-    console.log(data);
     const { search, limit, offset } = data;
     try {
         let query = `
@@ -452,6 +451,7 @@ exports.getAutoReco = async (data) => {
                   CONCAT(FORMAT(p.product_price, 0), ' 원') AS productPrice,
                   wp.detail_page_url as detailpageUrl,
                   p.search_word as searchWord,
+                  p.product_id as productId,
                   ar.reco_productNm as recoProductNm,
                   ar.reco_keyword as recoKeyword,
                   ar.reco_tag as recoTag,
@@ -488,6 +488,39 @@ exports.getAutoReco = async (data) => {
             type: Sequelize.QueryTypes.SELECT,
         });
         return result;
+    } catch (error) {
+        console.error('Error executing query : ', error);
+        throw error;
+    }
+};
+
+exports.putProductName = async (data) => {
+    const { productId, productName } = data;
+    console.log('productId : ', productId);
+    console.log('productName : ', productName);
+
+    try {
+        let query = `
+            UPDATE selper.products 
+            SET product_name = :productName
+            WHERE product_id = :productId
+        `;
+
+        const replacements = {
+            productName,
+            productId,
+        };
+
+        const result = await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.UPDATE,
+        });
+        // 리턴값 추가
+        if (result > 0) {
+            return { success: true, message: 'Product name updated successfully.' };
+        } else {
+            return { success: false, message: 'No product found with the given ID.' };
+        }
     } catch (error) {
         console.error('Error executing query : ', error);
         throw error;
