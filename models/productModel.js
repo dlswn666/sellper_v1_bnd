@@ -440,53 +440,79 @@ exports.putAutoReco = async (data) => {
 };
 
 exports.getAutoReco = async (data) => {
-    const { search, limit, offset } = data;
+    const { search, limit, offset, flag } = data;
     try {
-        let query = `
-           select wp.wholesale_site_id as siteId,
-                  wp.product_code as productCode,
-                  wp.wholesale_product_id as wholeProductId,
-                  wp.product_name as wholeProductName,
-                  CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
-                  CONCAT(FORMAT(p.product_price, 0), ' 원') AS productPrice,
-                  wp.detail_page_url as detailpageUrl,
-                  p.search_word as searchWord,
-                  p.product_id as productId,
-                  ar.reco_productNm as recoProductNm,
-                  ar.reco_keyword as recoKeyword,
-                  ar.reco_tag as recoTag,
-                  p.product_name as productName,
-                  wsi.site_name as siteName,
-	              wsi.site_url as siteUrl,
-                  (select count(*) 
-                   from auto_recommend ar
-                   left outer join products p 
-                   on p.product_id = ar.product_id
-                   left outer join wholesale_product wp 
-                   on wp.wholesale_product_id = p.wholesale_product_id
-                  ) as total_count
-          from auto_recommend ar
-          left outer join products p 
-          on p.product_id = ar.product_id
-          left outer join wholesale_product wp 
-          on wp.wholesale_product_id = p.wholesale_product_id
-          left outer join wholesale_site_info wsi 
-          on wp.wholesale_site_id = wsi.wholesale_site_id 
-          order by 
-              case 
-                  when p.product_name is not null and p.product_name != '' then 1
-                  else 0
-              end asc
-           LIMIT :limit OFFSET :offset   
-        `;
+        // 기본 쿼리 조립
+        let query = [
+            `SELECT wp.wholesale_site_id AS siteId,
+                    wp.product_code AS productCode,
+                    wp.wholesale_product_id AS wholeProductId,
+                    wp.product_name AS wholeProductName,
+                    CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
+                    CONCAT(FORMAT(p.product_price, 0), ' 원') AS productPrice,
+                    wp.detail_page_url AS detailpageUrl,
+                    p.search_word AS searchWord,
+                    p.product_id AS productId,
+                    ar.reco_productNm AS recoProductNm,
+                    ar.reco_keyword AS recoKeyword,
+                    ar.reco_tag AS recoTag,
+                    p.product_name AS productName,
+                    wsi.site_name AS siteName,
+                    wsi.site_url AS siteUrl,
+                    (SELECT COUNT(*) 
+                     FROM auto_recommend ar
+                     LEFT OUTER JOIN products p ON p.product_id = ar.product_id
+                     LEFT OUTER JOIN wholesale_product wp ON wp.wholesale_product_id = p.wholesale_product_id
+                    ) AS total_count
+             FROM auto_recommend ar
+             LEFT OUTER JOIN products p ON p.product_id = ar.product_id
+             LEFT OUTER JOIN wholesale_product wp ON wp.wholesale_product_id = p.wholesale_product_id
+             LEFT OUTER JOIN wholesale_site_info wsi ON wp.wholesale_site_id = wsi.wholesale_site_id`,
+        ];
+
+        // 조건부 쿼리문 추가
+        const queryCondition = (flag) => {
+            console.log(flag);
+            switch (flag) {
+                case 'proName':
+                    return `
+                        ORDER BY 
+                            CASE 
+                                WHEN p.product_name IS NOT NULL AND p.product_name != '' THEN 1
+                                ELSE 0
+                            END ASC
+                        LIMIT :limit OFFSET :offset
+                    `;
+                case 'tag':
+                    return `
+                        WHERE p.product_name IS NOT NULL
+                        ORDER BY wp.product_name ASC
+                        LIMIT :limit OFFSET :offset
+                    `;
+                default:
+                    return '';
+            }
+        };
+
+        // 조건에 따른 쿼리문 추가
+        const addQueryCondition = queryCondition(flag);
+        if (addQueryCondition) {
+            query.push(addQueryCondition); // 조건부 쿼리 추가
+        }
+
+        // 최종 쿼리 조립
+        const finalQuery = query.join(' ');
+
+        // 쿼리 실행
         const replacements = {
             limit,
             offset,
         };
-        const result = await db.query(query, {
+        const result = await db.query(finalQuery, {
             replacements,
             type: Sequelize.QueryTypes.SELECT,
         });
+
         return result;
     } catch (error) {
         console.error('Error executing query : ', error);

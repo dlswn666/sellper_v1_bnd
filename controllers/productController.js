@@ -154,13 +154,14 @@ exports.postSearchWord = async (req, res) => {
 };
 
 exports.searchAutoReco = async (req, res) => {
-    const { search = '', limit = 50, page = 1 } = req.query;
+    const { search = '', limit = 50, page = 1, flag = '' } = req.query;
 
     const data = {
         search,
         offset: (page - 1) * limit,
         limit: parseInt(limit, 10),
         page: parseInt(page, 10),
+        flag,
     };
 
     try {
