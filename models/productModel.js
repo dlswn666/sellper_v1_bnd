@@ -439,35 +439,51 @@ exports.putAutoReco = async (data) => {
     }
 };
 
+exports.getProductInfo;
+
 exports.getAutoReco = async (data) => {
     const { search, limit, offset, flag } = data;
     try {
         // 기본 쿼리 조립
         let query = [
-            `SELECT wp.wholesale_site_id AS siteId,
-                    wp.product_code AS productCode,
-                    wp.wholesale_product_id AS wholeProductId,
-                    wp.product_name AS wholeProductName,
-                    CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
-                    CONCAT(FORMAT(p.product_price, 0), ' 원') AS productPrice,
-                    wp.detail_page_url AS detailpageUrl,
-                    p.search_word AS searchWord,
-                    p.product_id AS productId,
-                    ar.reco_productNm AS recoProductNm,
-                    ar.reco_keyword AS recoKeyword,
-                    ar.reco_tag AS recoTag,
-                    p.product_name AS productName,
-                    wsi.site_name AS siteName,
-                    wsi.site_url AS siteUrl,
-                    (SELECT COUNT(*) 
-                     FROM auto_recommend ar
-                     LEFT OUTER JOIN products p ON p.product_id = ar.product_id
-                     LEFT OUTER JOIN wholesale_product wp ON wp.wholesale_product_id = p.wholesale_product_id
-                    ) AS total_count
+            `SELECT 
+                wp.wholesale_site_id AS siteId,
+                wp.product_code AS productCode,
+                wp.wholesale_product_id AS wholeProductId,
+                wp.product_name AS wholeProductName,
+                CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
+                CONCAT(FORMAT(p.product_price, 0), ' 원') AS productPrice,
+                wp.detail_page_url AS detailpageUrl,
+                p.search_word AS searchWord,
+                p.product_id AS productId,
+                ar.reco_productNm AS recoProductNm,
+                ar.reco_keyword AS recoKeyword,
+                ar.reco_tag AS recoTag,
+                recoCate.naver_recoCate,
+                recoCate.B_recoCate,
+                recoCate.C_recoCate,
+                p.product_name AS productName,
+                p.platform_tag AS platformTag,
+                wsi.site_name AS siteName,
+                wsi.site_url AS siteUrl,
+                (SELECT COUNT(*) 
+                 FROM auto_recommend ar
+                 LEFT OUTER JOIN products p ON p.product_id = ar.product_id
+                 LEFT OUTER JOIN wholesale_product wp ON wp.wholesale_product_id = p.wholesale_product_id
+                ) AS total_count
              FROM auto_recommend ar
              LEFT OUTER JOIN products p ON p.product_id = ar.product_id
              LEFT OUTER JOIN wholesale_product wp ON wp.wholesale_product_id = p.wholesale_product_id
-             LEFT OUTER JOIN wholesale_site_info wsi ON wp.wholesale_site_id = wsi.wholesale_site_id`,
+             LEFT OUTER JOIN wholesale_site_info wsi ON wp.wholesale_site_id = wsi.wholesale_site_id
+             LEFT JOIN (
+                SELECT 
+                    product_id,
+                    MAX(CASE WHEN platform_name = 'naver' THEN reco_cate END) AS naver_recoCate,
+                    MAX(CASE WHEN platform_name = 'B' THEN reco_cate END) AS B_recoCate,
+                    MAX(CASE WHEN platform_name = 'C' THEN reco_cate END) AS C_recoCate
+                FROM auto_recommend
+                GROUP BY product_id
+             ) AS recoCate ON ar.product_id = recoCate.product_id`,
         ];
 
         // 조건부 쿼리문 추가
@@ -486,6 +502,13 @@ exports.getAutoReco = async (data) => {
                 case 'tag':
                     return `
                         WHERE p.product_name IS NOT NULL
+                        ORDER BY wp.product_name ASC
+                        LIMIT :limit OFFSET :offset
+                    `;
+                case 'cate':
+                    return `
+                        WHERE p.product_name IS NOT NULL
+                        AND p.platform_tag IS NOT NULL
                         ORDER BY wp.product_name ASC
                         LIMIT :limit OFFSET :offset
                     `;
@@ -522,13 +545,13 @@ exports.getAutoReco = async (data) => {
 
 exports.putProductName = async (data) => {
     const { productId, productName } = data;
-    console.log('productId : ', productId);
-    console.log('productName : ', productName);
 
     try {
         let query = `
             UPDATE selper.products 
-            SET product_name = :productName
+            SET product_name = :productName,
+                update_dt = now(),
+            update_user = 'selper'
             WHERE product_id = :productId
         `;
 
@@ -549,6 +572,296 @@ exports.putProductName = async (data) => {
         }
     } catch (error) {
         console.error('Error executing query : ', error);
+        throw error;
+    }
+};
+
+exports.getCateProduct = async (data) => {
+    const { search = '', limit, offset, platformId } = data;
+    console.log(data);
+    try {
+        let query = `
+            SELECT 
+                p.product_id AS workingProductId,
+                p.wholesale_product_id AS wholesaleProductId,
+                p.search_word AS searchWord,
+                p.product_name as productName,
+                p.platform_tag AS platformTag,
+                wp.wholesale_site_id AS siteId,
+                wp.product_code AS productCode,
+                CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
+                wp.product_name AS wholeProductName,
+                wp.detail_page_url AS detailPageUrl,
+                wp.out_of_stock,
+                wp.last_updated,
+                wsi.site_name AS siteName,
+                recoCate.naver_recoCate,
+                recoCate.B_recoCate,
+                recoCate.C_recoCate
+            FROM products p
+            LEFT OUTER JOIN wholesale_product wp 
+                ON wp.wholesale_product_id = p.wholesale_product_id
+            left outer join wholesale_site_info wsi
+                on wp.wholesale_site_id = wsi.wholesale_site_id
+            LEFT JOIN (
+                SELECT 
+                    product_id,
+                    MAX(CASE WHEN platform_name = 'naver' THEN reco_cate END) AS naver_recoCate,
+                    MAX(CASE WHEN platform_name = 'B' THEN reco_cate END) AS B_recoCate,
+                    MAX(CASE WHEN platform_name = 'C' THEN reco_cate END) AS C_recoCate
+                FROM auto_recommend
+                GROUP BY product_id
+            ) AS recoCate ON p.product_id = recoCate.product_id
+            where p.product_name is not null and platform_tag is not null            
+        `;
+
+        if (search !== '') {
+            query += `
+                AND p.product_name like :search
+            `;
+        }
+
+        query += `
+            LIMIT :limit OFFSET :offset
+        `;
+
+        const replacements = {
+            search,
+            limit,
+            offset,
+            platformId,
+        };
+
+        const result = await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.SELECT,
+        });
+
+        return result;
+    } catch (error) {
+        console.error('Error executing query : ', error);
+        throw error;
+    }
+};
+
+exports.putProductTag = async (data) => {
+    const { productId, productTag } = data;
+
+    try {
+        let query = `
+            UPDATE selper.products 
+            SET platform_tag = :productTag,
+                update_dt = now(),
+                update_user = 'selper'
+            WHERE product_id = :productId
+        `;
+
+        const replacements = {
+            productTag,
+            productId,
+        };
+
+        const result = await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.UPDATE,
+        });
+        // 리턴값 추가
+        if (result > 0) {
+            return { success: true, message: 'Product tag updated successfully.' };
+        } else {
+            return { success: false, message: 'No product found with the given ID.' };
+        }
+    } catch (error) {
+        console.error('Error executing query : ', error);
+        throw error;
+    }
+};
+
+exports.getCategory = async (data) => {
+    const { categoryNo1, categoryNo2, categoryNo3, categoryNo4, categoryNo5, categoryNo6, platformId } = data;
+    console.log('getCategory###########################################', data);
+    try {
+        // 동적으로 WHERE 절 조건을 생성하는 배열
+        const conditions = [];
+        const categoryNos = [categoryNo1, categoryNo2, categoryNo3, categoryNo4, categoryNo5, categoryNo6];
+
+        let query = `
+            SELECT category_id, 
+                   platform_id, 
+                   category_num, 
+                   category_no1, 
+                   category_no2, 
+                   category_no3, 
+                   category_no4, 
+                   category_no5, 
+                   category_no6
+            FROM selper.platform_category
+            WHERE 1=1
+        `;
+
+        // 동적으로 조건 추가
+        categoryNos.forEach((value, index) => {
+            if (value) {
+                conditions.push(` AND category_no${index + 1} = :categoryNo${index + 1}`);
+            }
+        });
+
+        if (platformId === 'naver') {
+            query += `
+                AND platform_id = :platformId
+            `;
+        } else if (platformId === 'coupang') {
+            query += `
+                AND platform_id = :platformId
+            `;
+        } else if (platformId === 'elevenst') {
+            query += `
+                AND platform_id = :platformId
+            `;
+        } else if (platformId === 'gmarket') {
+            query += `
+                AND platform_id = :platformId
+            `;
+        } else {
+            throw new Error('유효하지 않은 마켓 이름입니다.');
+        }
+
+        query += conditions.join('');
+        console.log(query);
+
+        const replacements = {
+            categoryNo1,
+            categoryNo2,
+            categoryNo3,
+            categoryNo4,
+            categoryNo5,
+            categoryNo6,
+            platformId,
+        };
+
+        const result = await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.SELECT,
+        });
+
+        return result;
+    } catch (error) {
+        console.error('Error executing query : ', error);
+        throw error;
+    }
+};
+
+exports.postProcessCategory = async (data) => {
+    const { productId, categoryId, platformId } = data;
+
+    // 필수 파라미터 검증
+    if (!productId || !categoryId) {
+        throw new Error('필수 파라미터가 누락되었습니다.');
+    }
+    const uuid = uuid4();
+    try {
+        // 먼저 product_id가 존재하는지 확인
+        let checkQuery = `
+            SELECT pp_category_id 
+            FROM selper.processed_product_category 
+            WHERE product_id = :productId
+        `;
+
+        const existingRecord = await db.query(checkQuery, {
+            replacements: { productId },
+            type: Sequelize.QueryTypes.SELECT,
+        });
+
+        let query;
+        let replacements;
+
+        if (existingRecord && existingRecord.length > 0) {
+            // 레코드가 존재하면 UPDATE 쿼리 실행
+            query = `
+                UPDATE selper.processed_product_category
+                SET update_dt = CURRENT_TIMESTAMP,
+                    update_user = 'selper'
+            `;
+
+            // platformId에 따라 업데이트할 컬럼 설정
+            switch (platformId) {
+                case 'naver':
+                    query += `, naver_category_id = :categoryId`;
+                    break;
+                case 'coupang':
+                    query += `, coupang_category_id = :categoryId`;
+                    break;
+                case 'elevenst':
+                    query += `, elevenst_category_id = :categoryId`;
+                    break;
+                case 'gmarket':
+                    query += `, gmarket_category_id = :categoryId`;
+                    break;
+                default:
+                    throw new Error('유효하지 않은 마켓 이름입니다.');
+            }
+
+            query += ` WHERE product_id = :productId`;
+
+            replacements = {
+                productId,
+                categoryId,
+            };
+
+            const result = await db.query(query, {
+                replacements,
+                type: Sequelize.QueryTypes.UPDATE,
+            });
+
+            return result;
+        } else {
+            // 레코드가 없으면 INSERT 쿼리 실행
+            query = `
+                INSERT INTO selper.processed_product_category
+                (pp_category_id, product_id, create_dt, update_dt, update_user`;
+
+            let values = `
+                VALUES(:uuid, :productId, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'selper'`;
+
+            // platformId에 따라 컬럼과 값 설정
+            switch (platformId) {
+                case 'naver':
+                    query += `, naver_category_id)`;
+                    values += `, :categoryId)`;
+                    break;
+                case 'coupang':
+                    query += `, coupang_category_id)`;
+                    values += `, :categoryId)`;
+                    break;
+                case 'elevenst':
+                    query += `, elevenst_category_id)`;
+                    values += `, :categoryId)`;
+                    break;
+                case 'gmarket':
+                    query += `, gmarket_category_id)`;
+                    values += `, :categoryId)`;
+                    break;
+                default:
+                    throw new Error('유효하지 않은 마켓 이름입니다.');
+            }
+
+            query += values;
+
+            replacements = {
+                uuid,
+                productId,
+                categoryId,
+            };
+
+            const result = await db.query(query, {
+                replacements,
+                type: Sequelize.QueryTypes.INSERT,
+            });
+
+            return result;
+        }
+    } catch (error) {
+        console.error('카테고리 처리 중 오류 발생:', error);
         throw error;
     }
 };

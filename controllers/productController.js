@@ -182,11 +182,85 @@ exports.searchAutoReco = async (req, res) => {
     }
 };
 
+exports.getCateProduct = async (req, res) => {
+    const { search = '', limit = 50, page = 1 } = req.query;
+    const data = {
+        search,
+        limit: parseInt(limit, 10),
+        page: parseInt(page, 10),
+        offset: (page - 1) * limit,
+    };
+
+    try {
+        const result = await productModel.getCateProduct(data);
+
+        let productsData = await Promise.all(
+            result.map(async (product) => {
+                let thumbnail = await productModel.getThumbNailData(product.wholesaleProductId);
+                return {
+                    ...product,
+                    thumbnail,
+                };
+            })
+        );
+        res.status(200).json(productsData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 exports.putProductName = async (req, res) => {
     const data = req.body;
     try {
         const result = await productModel.putProductName(data);
 
+        res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+exports.putProductTag = async (req, res) => {
+    const data = req.body;
+    try {
+        const result = await productModel.putProductTag(data);
+
+        res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+exports.postProcessCategory = async (req, res) => {
+    try {
+        const result = await productModel.postProcessCategory(req.body);
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error in postProcessCategory controller:', error);
+        res.status(500).json({ success: false, message: '카테고리 처리 중 오류가 발생했습니다.' });
+    }
+};
+
+exports.getCategory = async (req, res) => {
+    try {
+        const result = await productModel.getCategory(req.query);
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error in getCategory controller:', error);
+        res.status(500).json({ success: false, message: '카테고리 조회 중 오류가 발생했습니다.' });
+    }
+};
+
+exports.putProductCategory = async (req, res) => {
+    const data = req.body;
+    try {
+        // 카테고리 id 조회
+        const categoryResult = await productModel.getCategory(data);
+        const categoryId = categoryResult[0].category_id;
+
+        // 카테고리 저장
+        data.categoryId = categoryId;
+        const result = await productModel.postProcessCategory(data);
         res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
     } catch (err) {
         res.status(500).json({ error: err.message });
