@@ -43,8 +43,6 @@ exports.searchNaverShopping = async (req, res) => {
             return Array.from(anchors).map((anchor) => anchor.textContent.trim());
         });
 
-        console.log(relatedTagsTexts);
-
         // 페이지 스크롤
         await autoScroll(page);
 
@@ -93,7 +91,6 @@ async function getPageData(page) {
                 try {
                     const text = await response.text();
                     const jsonData = JSON.parse(text);
-                    console.log(jsonData);
                     resolve(jsonData);
                 } catch (error) {
                     reject(error);
@@ -207,10 +204,6 @@ function expandObject(data) {
     const productTags = Object.entries(tags)
         .sort((a, b) => b[1] - a[1])
         .map((entry) => entry[0]);
-
-    console.log('productNum', productNum);
-    console.log('productName', productName);
-    console.log('productTags', productTags);
 
     return {
         productNum,

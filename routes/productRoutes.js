@@ -15,4 +15,5 @@ router.post('/postProcessCategory', productController.postProcessCategory);
 router.get('/getCategory', productController.getCategory);
 router.get('/getCateProduct', productController.getCateProduct);
 router.put('/putProductCategory', productController.putProductCategory);
+router.get('/getProductById', productController.getProductById);
 module.exports = router;

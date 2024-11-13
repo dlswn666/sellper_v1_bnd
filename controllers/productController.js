@@ -124,7 +124,6 @@ exports.getProductData = async (req, res) => {
         );
         productsData.total = total;
         // 병합된 데이터를 응답으로 보냄
-        console.log(productsData);
         res.status(200).json({ result: productsData, total });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -262,6 +261,17 @@ exports.putProductCategory = async (req, res) => {
         data.categoryId = categoryId;
         const result = await productModel.postProcessCategory(data);
         res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+exports.getProductById = async (req, res) => {
+    const { id } = req.query;
+    try {
+        console.log('error?');
+        const result = await productModel.getProductById(id);
+        res.status(200).json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

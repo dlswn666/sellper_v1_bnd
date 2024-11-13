@@ -16,8 +16,6 @@ const addSearchJob = async (data) => {
                 backoff: 5000, // 실패 시 5초 후 재시도
             }
         );
-
-        console.log('Search job added to the queue!');
     } catch (error) {
         console.error('Error adding job to the queue:', error);
     }
