@@ -277,12 +277,56 @@ exports.getProductById = async (req, res) => {
     }
 };
 
-exports.getProductPriceDataById = async (req, res) => {
-    const { search = '', id = '', limit = 50, offset = 0 } = req.query;
+exports.getProductPriceData = async (req, res) => {
     try {
-        const result = await productModel.getProductPriceDataById(id, search, limit, offset);
+        const { productId, search, limit = 100, offset = 0 } = req.query;
+
+        // productId나 search 둘 다 없어도 전체 데이터를 반환하도록 수정
+        let whereCondition = {};
+
+        if (productId) {
+            whereCondition.productId = productId;
+        }
+
+        if (search) {
+            whereCondition.productName = {
+                [Sequelize.Op.like]: `%${search}%`,
+            };
+        }
+
+        const result = await productModel.getProductPriceData(whereCondition, parseInt(limit), parseInt(offset));
+
+        let productsData = await Promise.all(
+            result.map(async (product) => {
+                let thumbnail = await productModel.getThumbNailData(product.wholesaleProductId);
+                return {
+                    ...product,
+                    thumbnail,
+                };
+            })
+        );
+
+        res.status(200).json(productsData);
+    } catch (error) {
+        console.error('Error fetching product price data:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+        });
+    }
+};
+
+exports.getPlatformPriceById = async (req, res) => {
+    const { productId } = req.query;
+
+    try {
+        if (!productId) {
+            return res.status(400).json({ error: 'Product ID is required' });
+        }
+
+        const result = await productModel.getPlatformPriceById(productId);
         res.status(200).json(result);
     } catch (err) {
+        console.error('Error in getPlatformPriceById controller:', err);
         res.status(500).json({ error: err.message });
     }
 };
