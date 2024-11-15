@@ -439,8 +439,6 @@ exports.putAutoReco = async (data) => {
     }
 };
 
-exports.getProductInfo;
-
 exports.getAutoReco = async (data) => {
     const { search, limit, offset, flag } = data;
     try {
@@ -908,48 +906,54 @@ exports.postProcessCategory = async (data) => {
 exports.getProductById = async (id) => {
     const checkQuery = `
         SELECT 
-            p.product_id AS workingProductId,
-            p.wholesale_product_id AS wholesaleProductId,
-            p.search_word AS searchWord,
-            p.product_name AS productName,
-            p.platform_tag AS platformTag,
-            wp.wholesale_site_id AS siteId,
-            wp.product_code AS productCode,
-            CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
-            wp.product_name AS wholeProductName,
-            wp.detail_page_url AS detailPageUrl,
-            wp.out_of_stock,
-            wp.last_updated,
-            wsi.site_name AS siteName,
-            recoCate.naver_recoCate,
-            recoCate.B_recoCate,
-            recoCate.C_recoCate,
-            GROUP_CONCAT(
-                CASE 
-                        WHEN pc.platform_id = 'naver' THEN 
-                            CONCAT(IF(pc.category_no1 IS NOT NULL AND pc.category_no1 != '', pc.category_no1, ''),
-                                   IF(pc.category_no2 IS NOT NULL AND pc.category_no2 != '', CONCAT(' > ', pc.category_no2), ''),
-                                   IF(pc.category_no3 IS NOT NULL AND pc.category_no3 != '', CONCAT(' > ', pc.category_no3), ''),
-                                   IF(pc.category_no4 IS NOT NULL AND pc.category_no4 != '', CONCAT(' > ', pc.category_no4), ''),
-                                   IF(pc.category_no5 IS NOT NULL AND pc.category_no5 != '', CONCAT(' > ', pc.category_no5), ''),
-                                   IF(pc.category_no6 IS NOT NULL AND pc.category_no6 != '', CONCAT(' > ', pc.category_no6), '')
-                            )
-                        ELSE NULL
-                    END
+                p.product_id AS workingProductId,
+                p.wholesale_product_id AS wholesaleProductId,
+                p.search_word AS searchWord,
+                p.product_name AS productName,
+                p.platform_tag AS platformTag,
+                wp.wholesale_site_id AS siteId,
+                wp.product_code AS productCode,
+                CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
+                wp.product_name AS wholeProductName,
+                wp.detail_page_url AS detailPageUrl,
+                wp.out_of_stock,
+                wp.last_updated,
+                wsi.site_name AS siteName,
+                recoCate.naver_recoCate,
+                recoCate.B_recoCate,
+                recoCate.C_recoCate,
+                GROUP_CONCAT(
+                    IF(naver_cate.category_no1 IS NOT NULL AND naver_cate.category_no1 != '', naver_cate.category_no1, ''),
+                    IF(naver_cate.category_no2 IS NOT NULL AND naver_cate.category_no2 != '', CONCAT(' > ', naver_cate.category_no2), ''),
+                    IF(naver_cate.category_no3 IS NOT NULL AND naver_cate.category_no3 != '', CONCAT(' > ', naver_cate.category_no3), ''),
+                    IF(naver_cate.category_no4 IS NOT NULL AND naver_cate.category_no4 != '', CONCAT(' > ', naver_cate.category_no4), ''),
+                    IF(naver_cate.category_no5 IS NOT NULL AND naver_cate.category_no5 != '', CONCAT(' > ', naver_cate.category_no5), ''),
+                    IF(naver_cate.category_no6 IS NOT NULL AND naver_cate.category_no6 != '', CONCAT(' > ', naver_cate.category_no6), '')
                 ) AS naverCategory,
                 GROUP_CONCAT(
-                    CASE 
-                        WHEN pc.platform_id = 'coupang' THEN 
-                            CONCAT(IF(pc.category_no1 IS NOT NULL AND pc.category_no1 != '', pc.category_no1, ''),
-                                   IF(pc.category_no2 IS NOT NULL AND pc.category_no2 != '', CONCAT(' > ', pc.category_no2), ''),
-                                   IF(pc.category_no3 IS NOT NULL AND pc.category_no3 != '', CONCAT(' > ', pc.category_no3), ''),
-                                   IF(pc.category_no4 IS NOT NULL AND pc.category_no4 != '', CONCAT(' > ', pc.category_no4), ''),
-                                   IF(pc.category_no5 IS NOT NULL AND pc.category_no5 != '', CONCAT(' > ', pc.category_no5), ''),
-                                   IF(pc.category_no6 IS NOT NULL AND pc.category_no6 != '', CONCAT(' > ', pc.category_no6), '')
-                            )
-                        ELSE NULL
-                    END
-                ) AS coupangCategory
+                    IF(coupang_cate.category_no1 IS NOT NULL AND coupang_cate.category_no1 != '', coupang_cate.category_no1, ''),
+                    IF(coupang_cate.category_no2 IS NOT NULL AND coupang_cate.category_no2 != '', CONCAT(' > ', coupang_cate.category_no2), ''),
+                    IF(coupang_cate.category_no3 IS NOT NULL AND coupang_cate.category_no3 != '', CONCAT(' > ', coupang_cate.category_no3), ''),
+                    IF(coupang_cate.category_no4 IS NOT NULL AND coupang_cate.category_no4 != '', CONCAT(' > ', coupang_cate.category_no4), ''),
+                    IF(coupang_cate.category_no5 IS NOT NULL AND coupang_cate.category_no5 != '', CONCAT(' > ', coupang_cate.category_no5), ''),
+                    IF(coupang_cate.category_no6 IS NOT NULL AND coupang_cate.category_no6 != '', CONCAT(' > ', coupang_cate.category_no6), '')
+                ) AS coupangCategory,
+                GROUP_CONCAT(
+                    IF(gmarket_cate.category_no1 IS NOT NULL AND gmarket_cate.category_no1 != '', gmarket_cate.category_no1, ''),
+                    IF(gmarket_cate.category_no2 IS NOT NULL AND gmarket_cate.category_no2 != '', CONCAT(' > ', gmarket_cate.category_no2), ''),
+                    IF(gmarket_cate.category_no3 IS NOT NULL AND gmarket_cate.category_no3 != '', CONCAT(' > ', gmarket_cate.category_no3), ''),
+                    IF(gmarket_cate.category_no4 IS NOT NULL AND gmarket_cate.category_no4 != '', CONCAT(' > ', gmarket_cate.category_no4), ''),
+                    IF(gmarket_cate.category_no5 IS NOT NULL AND gmarket_cate.category_no5 != '', CONCAT(' > ', gmarket_cate.category_no5), ''),
+                    IF(gmarket_cate.category_no6 IS NOT NULL AND gmarket_cate.category_no6 != '', CONCAT(' > ', gmarket_cate.category_no6), '')
+                ) AS gmarketCategory,
+                GROUP_CONCAT(
+                    IF(elevenst_cate.category_no1 IS NOT NULL AND elevenst_cate.category_no1 != '', elevenst_cate.category_no1, ''),
+                    IF(elevenst_cate.category_no2 IS NOT NULL AND elevenst_cate.category_no2 != '', CONCAT(' > ', elevenst_cate.category_no2), ''),
+                    IF(elevenst_cate.category_no3 IS NOT NULL AND elevenst_cate.category_no3 != '', CONCAT(' > ', elevenst_cate.category_no3), ''),
+                    IF(elevenst_cate.category_no4 IS NOT NULL AND elevenst_cate.category_no4 != '', CONCAT(' > ', elevenst_cate.category_no4), ''),
+                    IF(elevenst_cate.category_no5 IS NOT NULL AND elevenst_cate.category_no5 != '', CONCAT(' > ', elevenst_cate.category_no5), ''),
+                    IF(elevenst_cate.category_no6 IS NOT NULL AND elevenst_cate.category_no6 != '', CONCAT(' > ', elevenst_cate.category_no6), '')
+                ) AS elevenstCategory   
             FROM products p
             LEFT OUTER JOIN wholesale_product wp 
                 ON wp.wholesale_product_id = p.wholesale_product_id
@@ -964,27 +968,152 @@ exports.getProductById = async (id) => {
                 FROM auto_recommend
                 GROUP BY product_id
             ) AS recoCate ON p.product_id = recoCate.product_id
-            LEFT OUTER JOIN (
-                SELECT 
-                    ppc.product_id, 
-                    pc.platform_id,
-                    pc.category_no1, 
-                    pc.category_no2, 
-                    pc.category_no3, 
-                    pc.category_no4, 
-                    pc.category_no5, 
-                    pc.category_no6  
-                FROM processed_product_category ppc 
-                LEFT OUTER JOIN platform_category pc
-                    ON ppc.naver_category_id = pc.category_id
-            ) AS pc ON pc.product_id = p.product_id
+            LEFT OUTER JOIN processed_product_category ppc 
+                ON ppc.product_id = p.product_id
+            LEFT OUTER JOIN platform_category naver_cate
+                ON ppc.naver_category_id = naver_cate.category_id
+            LEFT OUTER JOIN platform_category coupang_cate
+                ON ppc.coupang_category_id = coupang_cate.category_id
+            LEFT OUTER JOIN platform_category gmarket_cate
+                ON ppc.gmarket_category_id = gmarket_cate.category_id
+            LEFT OUTER JOIN platform_category elevenst_cate
+                ON ppc.elevenst_category_id = elevenst_cate.category_id 
             WHERE p.product_name IS NOT NULL 
-            AND p.platform_tag IS NOT NULL
-            AND p.product_id = :id
+                AND p.platform_tag IS NOT NULL
+                AND p.product_id = :productId
     `;
-    const result = await db.query(checkQuery, {
-        replacements: { id },
-        type: Sequelize.QueryTypes.SELECT,
-    });
-    return result;
+    try {
+        const result = await db.query(checkQuery, {
+            replacements: { id },
+            type: Sequelize.QueryTypes.SELECT,
+        });
+        return result;
+    } catch (error) {
+        console.error('Error executing query : ', error);
+        throw error;
+    }
+};
+
+exports.getProductPriceDataById = async (id, search, limit, offset) => {
+    const checkQuery = `
+        SELECT 
+                p.product_id AS workingProductId,
+                p.wholesale_product_id AS wholesaleProductId,
+                p.search_word AS searchWord,
+                p.product_name AS productName,
+                p.platform_tag AS platformTag,
+                wp.wholesale_site_id AS siteId,
+                wp.product_code AS productCode,
+                CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
+                wp.product_name AS wholeProductName,
+                wp.detail_page_url AS detailPageUrl,
+                wp.out_of_stock,
+                wp.last_updated,
+                wsi.site_name AS siteName,
+                recoCate.naver_recoCate,
+                recoCate.B_recoCate,
+                recoCate.C_recoCate,
+                (SELECT COUNT(*)
+                FROM products p_inner
+                LEFT OUTER JOIN processed_product_category ppc_inner
+                    ON p_inner.product_id = ppc_inner.product_id
+                LEFT OUTER JOIN platform_category naver_cate_inner
+                    ON ppc_inner.naver_category_id = naver_cate_inner.category_id
+                LEFT OUTER JOIN platform_category coupang_cate_inner
+                    ON ppc_inner.coupang_category_id = coupang_cate_inner.category_id
+                LEFT OUTER JOIN platform_category gmarket_cate_inner
+                    ON ppc_inner.gmarket_category_id = gmarket_cate_inner.category_id
+                LEFT OUTER JOIN platform_category elevenst_cate_inner
+                    ON ppc_inner.elevenst_category_id = elevenst_cate_inner.category_id
+                WHERE p_inner.product_name IS NOT NULL 
+                    AND p_inner.platform_tag IS NOT NULL
+                    AND (naver_cate_inner.category_no1 IS NOT NULL 
+                        OR coupang_cate_inner.category_no1 IS NOT NULL 
+                        OR gmarket_cate_inner.category_no1 IS NOT NULL 
+                        OR elevenst_cate_inner.category_no1 IS NOT NULL)
+                ) AS total_count,
+                GROUP_CONCAT(
+                    IF(naver_cate.category_no1 IS NOT NULL AND naver_cate.category_no1 != '', naver_cate.category_no1, ''),
+                    IF(naver_cate.category_no2 IS NOT NULL AND naver_cate.category_no2 != '', CONCAT(' > ', naver_cate.category_no2), ''),
+                    IF(naver_cate.category_no3 IS NOT NULL AND naver_cate.category_no3 != '', CONCAT(' > ', naver_cate.category_no3), ''),
+                    IF(naver_cate.category_no4 IS NOT NULL AND naver_cate.category_no4 != '', CONCAT(' > ', naver_cate.category_no4), ''),
+                    IF(naver_cate.category_no5 IS NOT NULL AND naver_cate.category_no5 != '', CONCAT(' > ', naver_cate.category_no5), ''),
+                    IF(naver_cate.category_no6 IS NOT NULL AND naver_cate.category_no6 != '', CONCAT(' > ', naver_cate.category_no6), '')
+                ) AS naverCategory,
+                GROUP_CONCAT(
+                    IF(coupang_cate.category_no1 IS NOT NULL AND coupang_cate.category_no1 != '', coupang_cate.category_no1, ''),
+                    IF(coupang_cate.category_no2 IS NOT NULL AND coupang_cate.category_no2 != '', CONCAT(' > ', coupang_cate.category_no2), ''),
+                    IF(coupang_cate.category_no3 IS NOT NULL AND coupang_cate.category_no3 != '', CONCAT(' > ', coupang_cate.category_no3), ''),
+                    IF(coupang_cate.category_no4 IS NOT NULL AND coupang_cate.category_no4 != '', CONCAT(' > ', coupang_cate.category_no4), ''),
+                    IF(coupang_cate.category_no5 IS NOT NULL AND coupang_cate.category_no5 != '', CONCAT(' > ', coupang_cate.category_no5), ''),
+                    IF(coupang_cate.category_no6 IS NOT NULL AND coupang_cate.category_no6 != '', CONCAT(' > ', coupang_cate.category_no6), '')
+                ) AS coupangCategory,
+                GROUP_CONCAT(
+                    IF(gmarket_cate.category_no1 IS NOT NULL AND gmarket_cate.category_no1 != '', gmarket_cate.category_no1, ''),
+                    IF(gmarket_cate.category_no2 IS NOT NULL AND gmarket_cate.category_no2 != '', CONCAT(' > ', gmarket_cate.category_no2), ''),
+                    IF(gmarket_cate.category_no3 IS NOT NULL AND gmarket_cate.category_no3 != '', CONCAT(' > ', gmarket_cate.category_no3), ''),
+                    IF(gmarket_cate.category_no4 IS NOT NULL AND gmarket_cate.category_no4 != '', CONCAT(' > ', gmarket_cate.category_no4), ''),
+                    IF(gmarket_cate.category_no5 IS NOT NULL AND gmarket_cate.category_no5 != '', CONCAT(' > ', gmarket_cate.category_no5), ''),
+                    IF(gmarket_cate.category_no6 IS NOT NULL AND gmarket_cate.category_no6 != '', CONCAT(' > ', gmarket_cate.category_no6), '')
+                ) AS gmarketCategory,
+                GROUP_CONCAT(
+                    IF(elevenst_cate.category_no1 IS NOT NULL AND elevenst_cate.category_no1 != '', elevenst_cate.category_no1, ''),
+                    IF(elevenst_cate.category_no2 IS NOT NULL AND elevenst_cate.category_no2 != '', CONCAT(' > ', elevenst_cate.category_no2), ''),
+                    IF(elevenst_cate.category_no3 IS NOT NULL AND elevenst_cate.category_no3 != '', CONCAT(' > ', elevenst_cate.category_no3), ''),
+                    IF(elevenst_cate.category_no4 IS NOT NULL AND elevenst_cate.category_no4 != '', CONCAT(' > ', elevenst_cate.category_no4), ''),
+                    IF(elevenst_cate.category_no5 IS NOT NULL AND elevenst_cate.category_no5 != '', CONCAT(' > ', elevenst_cate.category_no5), ''),
+                    IF(elevenst_cate.category_no6 IS NOT NULL AND elevenst_cate.category_no6 != '', CONCAT(' > ', elevenst_cate.category_no6), '')
+                ) AS elevenstCategory   
+            FROM products p
+            LEFT OUTER JOIN wholesale_product wp 
+                ON wp.wholesale_product_id = p.wholesale_product_id
+            LEFT OUTER JOIN wholesale_site_info wsi
+                ON wp.wholesale_site_id = wsi.wholesale_site_id
+            LEFT JOIN (
+                SELECT 
+                    product_id,
+                    MAX(CASE WHEN platform_name = 'naver' THEN reco_cate END) AS naver_recoCate,
+                    MAX(CASE WHEN platform_name = 'B' THEN reco_cate END) AS B_recoCate,
+                    MAX(CASE WHEN platform_name = 'C' THEN reco_cate END) AS C_recoCate
+                FROM auto_recommend
+                GROUP BY product_id
+            ) AS recoCate ON p.product_id = recoCate.product_id
+            LEFT OUTER JOIN processed_product_category ppc 
+                ON ppc.product_id = p.product_id
+            LEFT OUTER JOIN platform_category naver_cate
+                ON ppc.naver_category_id = naver_cate.category_id
+            LEFT OUTER JOIN platform_category coupang_cate
+                ON ppc.coupang_category_id = coupang_cate.category_id
+            LEFT OUTER JOIN platform_category gmarket_cate
+                ON ppc.gmarket_category_id = gmarket_cate.category_id
+            LEFT OUTER JOIN platform_category elevenst_cate
+                ON ppc.elevenst_category_id = elevenst_cate.category_id 
+            WHERE p.product_name IS NOT NULL 
+                AND p.platform_tag IS NOT NULL
+                AND (naverCategory IS NOT NULL OR coupangCategory IS NOT NULL OR gmarketCategory IS NOT NULL OR elevenstCategory IS NOT NULL)
+    `;
+    const replacements = {};
+
+    if (search) {
+        checkQuery += ` AND p.product_name = :search`;
+        replacements.search = search;
+    }
+    if (id) {
+        checkQuery += ` AND p.product_id = :id`;
+        replacements.id = id;
+    }
+    checkQuery += ` LIMIT :limit OFFSET :offset`;
+    replacements.limit = limit;
+    replacements.offset = offset;
+
+    try {
+        const result = await db.query(checkQuery, {
+            replacements,
+            type: Sequelize.QueryTypes.SELECT,
+        });
+        return result;
+    } catch (error) {
+        console.error('Error executing query : ', error);
+        throw error;
+    }
 };

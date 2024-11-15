@@ -276,3 +276,13 @@ exports.getProductById = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
+exports.getProductPriceDataById = async (req, res) => {
+    const { search = '', id = '', limit = 50, offset = 0 } = req.query;
+    try {
+        const result = await productModel.getProductPriceDataById(id, search, limit, offset);
+        res.status(200).json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};

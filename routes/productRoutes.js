@@ -16,4 +16,5 @@ router.get('/getCategory', productController.getCategory);
 router.get('/getCateProduct', productController.getCateProduct);
 router.put('/putProductCategory', productController.putProductCategory);
 router.get('/getProductById', productController.getProductById);
+router.get('/getProductPriceDataById', productController.getProductPriceDataById);
 module.exports = router;
