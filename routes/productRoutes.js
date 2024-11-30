@@ -18,4 +18,5 @@ router.put('/putProductCategory', productController.putProductCategory);
 router.get('/getProductById', productController.getProductById);
 router.get('/getProductPriceData', productController.getProductPriceData);
 router.get('/getPlatformPriceById', productController.getPlatformPriceById);
+router.put('/putPlatformPrice', productController.putPlatformPrice);
 module.exports = router;

@@ -49,19 +49,20 @@ exports.putWorkingData = async (req, res) => {
                             const productPriceString = item.productPrice;
                             let productPrice = parseInt(productPriceString.replace('원', '').replace(',', ''), 10);
 
-                            const margin_price = Math.ceil((productPrice * targetProfitRatio) / 100) * 100;
-                            const tax_price = parseInt(productPrice * taxRatio);
+                            // 플랫폼 수수료액 자동 계산 - (마진금액 + 세금액) * 플랫폼 수수료율
                             const platForm_price = parseInt((margin_price + tax_price) * feeRatio);
-
+                            // 할인액 자동 계산 - ((판매가 + 마진금액 + 세금액 + 플랫폼 수수료액) * 할인 비율)
                             const discount_price =
                                 Math.ceil(
                                     ((productPrice + margin_price + tax_price + platForm_price) * discountRatio) / 100
                                 ) * 100;
 
-                            const price =
-                                Math.ceil(
-                                    (productPrice + margin_price + tax_price + platForm_price + discount_price) / 100
-                                ) * 100;
+                            const price = productPrice + margin_price + tax_price + platForm_price + discount_price;
+
+                            // 마진금액 자동 계산 - 판매가 * 순이익 비율
+                            const margin_price = (price * targetProfitRatio) / 100;
+                            // 세금액 자동 계산 - 판매가 * 세금 비율
+                            const tax_price = parseInt(price * taxRatio);
 
                             const platformId = data.id;
 
@@ -327,6 +328,16 @@ exports.getPlatformPriceById = async (req, res) => {
         res.status(200).json(result);
     } catch (err) {
         console.error('Error in getPlatformPriceById controller:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+// 플랫폼 가격 정보 수정
+exports.putPlatformPrice = async (req, res) => {
+    const data = req.body;
+    try {
+        const result = await productModel.putPlatformPrice(data);
+        res.status(200).json({ result: result, message: 'success' });
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 };

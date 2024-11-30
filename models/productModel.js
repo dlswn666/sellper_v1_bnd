@@ -1146,3 +1146,55 @@ exports.getPlatformPriceById = async (productId) => {
         throw error;
     }
 };
+
+exports.putPlatformPrice = async (data) => {
+    const {
+        platformPriceId,
+        platformId,
+        salePrice,
+        discountPrice,
+        marginPercent,
+        marginPrice,
+        taxPercent,
+        taxPrice,
+        platformPercent,
+        platformPrice,
+    } = data[0];
+    console.log(data);
+    const replacements = {
+        platformPriceId: platformPriceId,
+        platformId: platformId,
+        salePrice: salePrice,
+        discountPrice: discountPrice,
+        marginPercent: marginPercent / 100,
+        marginPrice: marginPrice,
+        taxPercent: taxPercent / 100,
+        taxPrice: taxPrice,
+        platformPercent: platformPercent / 100,
+        platformPrice: platformPrice,
+    };
+    console.log(replacements);
+    const query = `
+        UPDATE platform_price
+        SET price = :salePrice,
+            discount_price = :discountPrice,
+            margin_percent = :marginPercent,
+            margin_price = :marginPrice,
+            tax_percent = :taxPercent,
+            tax_price = :taxPrice,
+            platform_percent = :platformPercent,
+            platform_price = :platformPrice,
+            update_dt = CURRENT_TIMESTAMP
+        WHERE platform_price_id = :platformPriceId
+    `;
+    try {
+        const result = await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.UPDATE,
+        });
+        return result;
+    } catch (error) {
+        console.error('Error executing putPlatformPrice query:', error);
+        throw error;
+    }
+};
