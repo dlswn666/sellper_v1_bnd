@@ -32,8 +32,6 @@ export const getAccessToken = async (req, res) => {
         const clientId = process.env.NAVER_CLIENT_ID;
         const clientSecret = process.env.NAVER_CLIENT_SECRET;
 
-        console.log(clientId, clientSecret);
-
         const password = `${clientId}_${timestamp}`;
         const hashedPassword = bcrypt.hashSync(password, clientSecret);
         const signature = Buffer.from(hashedPassword, 'utf-8').toString('base64');
