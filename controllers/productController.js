@@ -1,9 +1,9 @@
-const productModel = require('../models/productModel');
-const { v4: uuid4 } = require('uuid');
-const Queue = require('bull');
-const addSearchJob = require('../queue/producer');
+import * as productModel from '../models/productModel.js';
+import { v4 as uuid4 } from 'uuid';
+import Queue from 'bull';
+import { addSearchJob } from '../queue/producer.js';
 
-exports.getSelectProductData = async (req, res) => {
+export const getSelectProductData = async (req, res) => {
     const { search = '', limit = 50, page = 1 } = req.query;
 
     const data = {
@@ -22,7 +22,7 @@ exports.getSelectProductData = async (req, res) => {
     }
 };
 
-exports.putWorkingData = async (req, res) => {
+export const putWorkingData = async (req, res) => {
     const data = req.body;
     try {
         if (data) {
@@ -81,7 +81,7 @@ exports.putWorkingData = async (req, res) => {
                             };
 
                             // 비동기 작업 - 플랫폼 가격 정보 저장
-                            await productModel.putPlatformPrice(paramData);
+                            await productModel.postPlatformPrice(paramData);
                         } catch (err) {
                             console.error(`Platform ${platformData.id} 가격 계산 실패: `, err);
                         }
@@ -98,7 +98,7 @@ exports.putWorkingData = async (req, res) => {
     }
 };
 
-exports.getProductData = async (req, res) => {
+export const getProductData = async (req, res) => {
     const { search = '', limit = 50, page = 1 } = req.query;
 
     const data = {
@@ -131,7 +131,7 @@ exports.getProductData = async (req, res) => {
     }
 };
 
-exports.getSearchWord = async (req, res) => {
+export const getSearchWord = async (req, res) => {
     try {
         const searchWord = await productModel.getSearchWord(req.params.productId);
 
@@ -141,7 +141,7 @@ exports.getSearchWord = async (req, res) => {
     }
 };
 
-exports.postSearchWord = async (req, res) => {
+export const postSearchWord = async (req, res) => {
     const data = req.body;
     try {
         const result = await productModel.postSearchWord(data);
@@ -153,7 +153,7 @@ exports.postSearchWord = async (req, res) => {
     }
 };
 
-exports.searchAutoReco = async (req, res) => {
+export const searchAutoReco = async (req, res) => {
     const { search = '', limit = 50, page = 1, flag = '' } = req.query;
 
     const data = {
@@ -182,7 +182,7 @@ exports.searchAutoReco = async (req, res) => {
     }
 };
 
-exports.getCateProduct = async (req, res) => {
+export const getCateProduct = async (req, res) => {
     const { search = '', limit = 50, page = 1 } = req.query;
     const data = {
         search,
@@ -209,7 +209,7 @@ exports.getCateProduct = async (req, res) => {
     }
 };
 
-exports.putProductName = async (req, res) => {
+export const putProductName = async (req, res) => {
     const data = req.body;
     try {
         const result = await productModel.putProductName(data);
@@ -220,7 +220,7 @@ exports.putProductName = async (req, res) => {
     }
 };
 
-exports.putProductTag = async (req, res) => {
+export const putProductTag = async (req, res) => {
     const data = req.body;
     try {
         const result = await productModel.putProductTag(data);
@@ -231,7 +231,7 @@ exports.putProductTag = async (req, res) => {
     }
 };
 
-exports.postProcessCategory = async (req, res) => {
+export const postProcessCategory = async (req, res) => {
     try {
         const result = await productModel.postProcessCategory(req.body);
         res.status(200).json({ success: true, data: result });
@@ -241,7 +241,7 @@ exports.postProcessCategory = async (req, res) => {
     }
 };
 
-exports.getCategory = async (req, res) => {
+export const getCategory = async (req, res) => {
     try {
         const result = await productModel.getCategory(req.query);
         res.status(200).json({ success: true, data: result });
@@ -251,7 +251,7 @@ exports.getCategory = async (req, res) => {
     }
 };
 
-exports.putProductCategory = async (req, res) => {
+export const putProductCategory = async (req, res) => {
     const data = req.body;
     try {
         // 카테고리 id 조회
@@ -267,7 +267,7 @@ exports.putProductCategory = async (req, res) => {
     }
 };
 
-exports.getProductById = async (req, res) => {
+export const getProductById = async (req, res) => {
     const { id } = req.query;
     try {
         console.log('error?');
@@ -278,7 +278,7 @@ exports.getProductById = async (req, res) => {
     }
 };
 
-exports.getProductPriceData = async (req, res) => {
+export const getProductPriceData = async (req, res) => {
     try {
         const { productId, search, limit = 100, offset = 0 } = req.query;
 
@@ -316,7 +316,7 @@ exports.getProductPriceData = async (req, res) => {
     }
 };
 
-exports.getPlatformPriceById = async (req, res) => {
+export const getPlatformPriceById = async (req, res) => {
     const { productId } = req.query;
 
     try {
@@ -332,11 +332,57 @@ exports.getPlatformPriceById = async (req, res) => {
     }
 };
 // 플랫폼 가격 정보 수정
-exports.putPlatformPrice = async (req, res) => {
+export const putPlatformPrice = async (req, res) => {
     const data = req.body;
     try {
         const result = await productModel.putPlatformPrice(data);
+        if (result) {
+            await productModel.putProductPrice(data);
+        }
         res.status(200).json({ result: result, message: 'success' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const getProductAttributeData = async (req, res) => {
+    const { productId, search, limit = 100, offset = 0 } = req.query;
+
+    let whereCondition = {};
+
+    if (productId) {
+        whereCondition.productId = productId;
+    }
+
+    if (search) {
+        whereCondition.productName = {
+            [Sequelize.Op.like]: `%${search}%`,
+        };
+    }
+
+    try {
+        const result = await productModel.getProductAttributeData(whereCondition, parseInt(limit), parseInt(offset));
+        let productsData = await Promise.all(
+            result.map(async (product) => {
+                let thumbnail = await productModel.getThumbNailData(product.wholesaleProductId);
+                return {
+                    ...product,
+                    thumbnail,
+                };
+            })
+        );
+
+        res.status(200).json(productsData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const getProductDetailImage = async (req, res) => {
+    const { wholesaleProductId } = req.query;
+    try {
+        const result = await productModel.getProductDetailImage(wholesaleProductId);
+        res.status(200).json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

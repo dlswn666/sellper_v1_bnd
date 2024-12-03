@@ -1,9 +1,9 @@
-const Queue = require('bull');
+import Queue from 'bull';
 const naverSearch = new Queue('naverSearch', 'redis://127.0.0.1:6379');
-const { searchNaverShopping } = require('../service/searchNaverShopping');
-const productModel = require('../models/productModel');
+import { searchNaverShopping } from '../service/searchNaverShopping';
+import productModel from '../models/productModel';
 
-const db = require('../config/db');
+import db from '../config/db';
 
 (async () => {
     try {
@@ -40,3 +40,5 @@ naverSearch.on('completed', (job) => {
 naverSearch.on('failed', (job, err) => {
     console.log(`Job with ID ${job.id} has failed with error: ${err.message}`);
 });
+
+export default consumer;

@@ -1,5 +1,5 @@
-const express = require('express');
-const productController = require('../controllers/productController');
+import express from 'express';
+import * as productController from '../controllers/productController.js';
 
 const router = express.Router();
 
@@ -19,4 +19,6 @@ router.get('/getProductById', productController.getProductById);
 router.get('/getProductPriceData', productController.getProductPriceData);
 router.get('/getPlatformPriceById', productController.getPlatformPriceById);
 router.put('/putPlatformPrice', productController.putPlatformPrice);
-module.exports = router;
+router.get('/getProductAttributeData', productController.getProductAttributeData);
+router.get('/getProductDetailImage', productController.getProductDetailImage);
+export default router;

@@ -1,8 +1,8 @@
-const db = require('../config/db');
-const { Sequelize } = require('sequelize');
-const { v4: uuid4 } = require('uuid');
+import db from '../config/db.js';
+import { Sequelize } from 'sequelize';
+import { v4 as uuid4 } from 'uuid';
 
-exports.getSearchWord = async () => {
+export const getSearchWord = async () => {
     try {
         const [searchWord] = await db.query(
             `
@@ -22,7 +22,7 @@ exports.getSearchWord = async () => {
     }
 };
 
-exports.putAutoReco = async (data) => {
+export const putAutoReco = async (data) => {
     const { id, productName, productTags, cateId, cateNam } = data;
     try {
         const query = `

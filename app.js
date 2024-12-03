@@ -1,11 +1,12 @@
-const express = require('express');
-const morgan = require('morgan');
-const cors = require('cors');
-require('dotenv').config();
+import express from 'express';
+import morgan from 'morgan';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import productRoutes from './routes/productRoutes.js';
+import searchController from './routes/searchRoutes.js';
+import naverCommerceRoutes from './routes/naverCommerceRoutes.js';
 
-const productRoutes = require('./routes/productRoutes');
-const searchController = require('./routes/searchRoutes');
-
+dotenv.config();
 const app = express();
 
 // 미들웨어 설정
@@ -16,6 +17,7 @@ app.use(express.json()); // JSON 데이터 파싱
 // 라우트 설정
 app.use('/api', productRoutes);
 app.use('/naverSearch', searchController);
+app.use('/naverCommerce', naverCommerceRoutes);
 
 // 기본 라우트
 app.get('/', (req, res) => {
@@ -28,4 +30,4 @@ app.use((err, req, res, next) => {
     res.status(500).send('Something broke!');
 });
 
-module.exports = app;
+export default app;

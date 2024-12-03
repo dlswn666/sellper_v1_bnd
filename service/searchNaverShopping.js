@@ -1,23 +1,23 @@
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-const path = require('path');
+import puppeteer from 'puppeteer';
+import fs from 'fs';
+import path from 'path';
 
 // 많이 사용되는 모니터 해상도 배열
-const monitorSizes = ['1920x1080', '1366x768', '1440x900', '1536x864', '1280x720'];
+export const monitorSizes = ['1920x1080', '1366x768', '1440x900', '1536x864', '1280x720'];
 
 // 랜덤으로 선택된 모니터 해상도
-const randomSize = monitorSizes[Math.floor(Math.random() * monitorSizes.length)];
-const [width, height] = randomSize.split('x').map(Number);
+export const randomSize = monitorSizes[Math.floor(Math.random() * monitorSizes.length)];
+export const [width, height] = randomSize.split('x').map(Number);
 
 // 사람처럼 랜덤 대기 시간을 설정하는 함수
-const randomWait = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+export const randomWait = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-const waitForTimeout = (ms) => {
+export const waitForTimeout = (ms) => {
     return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
 // 함수 형태로 변경
-const searchNaverShopping = async (data) => {
+export const searchNaverShopping = async (data) => {
     if (!data) {
         throw new Error('Query parameter is required');
     }
@@ -255,4 +255,4 @@ function expandObject(data) {
     };
 }
 
-module.exports = { searchNaverShopping };
+export default searchNaverShopping;

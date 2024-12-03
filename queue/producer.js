@@ -1,10 +1,10 @@
-const Queue = require('bull');
+import Queue from 'bull';
 
 // Redis 서버에 연결된 Bull Queue 생성
 const naverSearch = new Queue('naverSearch', 'redis://127.0.0.1:6379');
 
 // Producer: 작업을 큐에 추가하는 함수
-const addSearchJob = async (data) => {
+export const addSearchJob = async (data) => {
     try {
         // 작업을 큐에 추가
         await naverSearch.add(

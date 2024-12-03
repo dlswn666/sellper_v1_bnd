@@ -1,8 +1,8 @@
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-const path = require('path');
-const searchModel = require('../models/searchModel');
-const searchNaverShopping = require('../service/searchNaverShopping');
+import puppeteer from 'puppeteer';
+import fs from 'fs';
+import path from 'path';
+import * as searchModel from '../models/searchModel.js';
+import * as searchNaverShopping from '../service/searchNaverShopping.js';
 
 // 많이 사용되는 모니터 해상도 배열
 const monitorSizes = ['1920x1080', '1366x768', '1440x900', '1536x864', '1280x720'];
@@ -11,7 +11,7 @@ const monitorSizes = ['1920x1080', '1366x768', '1440x900', '1536x864', '1280x720
 const randomSize = monitorSizes[Math.floor(Math.random() * monitorSizes.length)];
 const [width, height] = randomSize.split('x').map(Number);
 
-exports.searchNaverShopping = async (req, res) => {
+export const fnSearchNaverShopping = async (req, res) => {
     const query = req.query.q;
 
     if (!query) {
@@ -214,7 +214,7 @@ function expandObject(data) {
     };
 }
 
-exports.postAutoReco = async () => {
+export const postAutoReco = async () => {
     const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     // 우선 검색어 등록된 데이터 중 auto_recommend DB 와 mapping 안된 데이터 검색해서 검색어 return
     try {
