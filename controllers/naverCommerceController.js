@@ -74,8 +74,7 @@ export const getProductAttributeValues = async (req, res) => {
         // 토큰 유효성 검사
         if (!token || !tokenManager.isTokenValid('naver')) {
             try {
-                token = await exports.getAccessToken(req, res);
-                console.log(token);
+                token = await getAccessToken(req, res);
             } catch (error) {
                 console.error('Failed to refresh Naver token', error);
             }
@@ -108,7 +107,7 @@ export const getProductAttributes = async (req, res) => {
         let token = tokenManager.getToken('naver');
         if (!token || !tokenManager.isTokenValid('naver')) {
             try {
-                token = await exports.getAccessToken(req, res);
+                token = await getAccessToken(req, res);
             } catch (error) {
                 console.error('Failed to refresh Naver token', error);
             }

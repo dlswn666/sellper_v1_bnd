@@ -9,7 +9,7 @@ const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, proces
     port: process.env.DB_PORT || 3306,
     dialectOptions: {
         ssl: {
-            rejectUnauthorized: process.env.SSL_MODE, // SSL 검증 비활성화
+            rejectUnauthorized: false, // SSL 검증 비활성화
         },
     },
 });
