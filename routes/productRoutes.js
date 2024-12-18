@@ -21,4 +21,5 @@ router.get('/getPlatformPriceById', productController.getPlatformPriceById);
 router.put('/putPlatformPrice', productController.putPlatformPrice);
 router.get('/getProductAttributeData', productController.getProductAttributeData);
 router.get('/getProductDetailImage', productController.getProductDetailImage);
+router.get('/getProductOption', productController.getProductOption);
 export default router;

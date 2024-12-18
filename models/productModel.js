@@ -501,7 +501,11 @@ export const getAutoReco = async (data) => {
                 case 'tag':
                     return `
                         WHERE p.product_name IS NOT NULL
-                        ORDER BY wp.product_name ASC
+                        ORDER BY 
+                            CASE 
+                                WHEN p.platform_tag IS NOT NULL AND p.platform_tag != '' THEN 1
+                                ELSE 0
+                            END ASC
                         LIMIT :limit OFFSET :offset
                     `;
                 case 'cate':
@@ -596,6 +600,7 @@ export const getCateProduct = async (data) => {
                 recoCate.naver_recoCate,
                 recoCate.B_recoCate,
                 recoCate.C_recoCate,
+                recoCate.product_id AS recoProductId,
                 GROUP_CONCAT(
                     IF(naver_cate.category_no1 IS NOT NULL AND naver_cate.category_no1 != '', naver_cate.category_no1, ''),
                     IF(naver_cate.category_no2 IS NOT NULL AND naver_cate.category_no2 != '', CONCAT(' > ', naver_cate.category_no2), ''),
@@ -661,6 +666,7 @@ export const getCateProduct = async (data) => {
         }
 
         query += ` GROUP BY p.product_id, wp.wholesale_site_id, wp.product_code, wp.product_price, wp.product_name, wp.detail_page_url, wp.out_of_stock, wp.last_updated, wsi.site_name, recoCate.naver_recoCate, recoCate.B_recoCate, recoCate.C_recoCate`;
+        query += ` ORDER BY CASE WHEN recoProductId IS NOT NULL THEN 1 ELSE 0 END ASC`;
         query += ` LIMIT :limit OFFSET :offset`;
 
         const replacements = {
@@ -1202,14 +1208,16 @@ export const putPlatformPrice = async (data) => {
 
 export const putProductPrice = async (data) => {
     console.log('*************************data', data);
-    const { productsId, salePrice } = data[0];
+    const { productsId, salePrice, discountPrice } = data[0];
     const replacements = {
         productId: productsId,
         price: salePrice,
+        discountPrice: discountPrice,
     };
     const query = `
         UPDATE products
         SET product_price = :price,
+            discount_charge = :discountPrice,
             update_dt = CURRENT_TIMESTAMP
         WHERE product_id = :productId
     `;
@@ -1372,6 +1380,67 @@ export const getProductDetailImage = async (wholesaleProductId) => {
         return result;
     } catch (error) {
         console.error('Error executing getProductDetailImage query:', error);
+        throw error;
+    }
+};
+
+export const getProductOption = async (whereCondition, limit, offset) => {
+    let replacements = {
+        limit: limit,
+        offset: offset,
+    };
+    let query = `
+        select distinct  
+            p.product_id as productId, 
+            p.wholesale_product_id as wholesaleProductId,
+            p.product_name as productName, 
+            p.product_price as productPrice,
+            p.discount_charge as discountCharge,
+            wp.detail_page_url as detailPageUrl 
+        from products p
+        left outer join wholesale_product_options wpo 
+        on p.wholesale_product_id = wpo.wholesale_product_id 
+        left outer join wholesale_product wp 
+        on p.wholesale_product_id = wp.wholesale_product_id 
+        where 1 = 1 and 
+        p.product_price is not null
+        and p.product_name is not null
+        and wpo.option_id is not null
+    `;
+
+    if (whereCondition.productId) {
+        query += ` AND p.product_id = :productId`;
+        replacements.productId = whereCondition.productId;
+    }
+
+    query += ` LIMIT :limit OFFSET :offset`;
+
+    const optionProductQuery = `
+        SELECT 
+            wpo.option_id as optionId, 
+            wpo.option_name as optionName,
+            wpo.option_value as optionValue,
+            wpo.option_price as optionPrice
+        FROM wholesale_product_options wpo
+        WHERE wpo.wholesale_product_id = :wholesaleProductId
+    `;
+
+    try {
+        const getProductOptionResult = await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.SELECT,
+        });
+        getProductOptionResult.forEach(async (product) => {
+            const getOptionProductResult = await db.query(optionProductQuery, {
+                replacements: { wholesaleProductId: product.wholesaleProductId },
+                type: Sequelize.QueryTypes.SELECT,
+            });
+            product.optionProduct = getOptionProductResult;
+        });
+        console.log('*************************result', getProductOptionResult);
+        return getProductOptionResult;
+    } catch (error) {
+        console.error('Error executing getProductOption query:', error);
         throw error;
     }
 };

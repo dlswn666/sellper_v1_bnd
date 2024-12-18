@@ -387,3 +387,33 @@ export const getProductDetailImage = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
+export const getProductOption = async (req, res) => {
+    const { productId, limit = 100, offset = 0 } = req.query;
+
+    console.log(req.query);
+
+    let whereCondition = {};
+
+    if (productId) {
+        whereCondition.productId = productId;
+    }
+
+    try {
+        console.log('오류 확인1');
+        const result = await productModel.getProductOption(whereCondition, parseInt(limit), parseInt(offset));
+        let productsData = await Promise.all(
+            result.map(async (product) => {
+                let thumbnail = await productModel.getThumbNailData(product.wholesaleProductId);
+                return {
+                    ...product,
+                    thumbnail,
+                };
+            })
+        );
+        console.log('오류 확인2');
+        res.status(200).json(productsData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
