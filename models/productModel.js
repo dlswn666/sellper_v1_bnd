@@ -798,7 +798,7 @@ export const getCategory = async (data) => {
 export const postProcessCategory = async (data) => {
     const { productId, categoryId, platformId } = data;
 
-    // 필수 파라미터 검증
+    // 필수 파���미터 검증
     if (!productId || !categoryId) {
         throw new Error('필수 파라미터가 누락되었습니다.');
     }
@@ -1420,7 +1420,9 @@ export const getProductOption = async (whereCondition, limit, offset) => {
             wpo.option_id as optionId, 
             wpo.option_name as optionName,
             wpo.option_value as optionValue,
-            wpo.option_price as optionPrice
+            wpo.option_price as optionPrice,
+            wpo.option_stock as optionStock,
+            wpo.wholesale_product_id as wholesaleProductId
         FROM wholesale_product_options wpo
         WHERE wpo.wholesale_product_id = :wholesaleProductId
     `;
@@ -1441,6 +1443,128 @@ export const getProductOption = async (whereCondition, limit, offset) => {
         return getProductOptionResult;
     } catch (error) {
         console.error('Error executing getProductOption query:', error);
+        throw error;
+    }
+};
+
+export const getOptionSettings = async (optionSettings) => {
+    const query = `
+        SELECT 
+            option_id as optionId,
+            products_id as productsId,
+            option_type as optionType,
+            platform as platform,
+            option_name as optionName,
+            option_price as optionPrice,
+            option_stock as optionStock,
+            create_user as createUser,
+            create_dt as createDt,
+            update_user as updateUser,
+            update_dt as updateDt,
+            wholesale_product_id as wholesaleProductId
+        FROM selper.platform_product_options
+        WHERE products_id = :productsId
+        AND wholesale_product_id = :wholesaleProductId
+        AND platform = :platform
+        AND create_user = :createUser
+    `;
+    try {
+        const result = await db.query(query, {
+            replacements: optionSettings,
+            type: Sequelize.QueryTypes.SELECT,
+        });
+        return result;
+    } catch (error) {
+        console.error('Error executing getOptionSettings query:', error);
+        throw error;
+    }
+};
+
+export const postOptionSettings = async (optionSettings) => {
+    const t = await db.transaction(); // 트랜잭션 시작
+
+    try {
+        // 기존 데이터 확인
+        const checkQuery = `
+            SELECT products_id 
+            FROM selper.platform_product_options
+            WHERE products_id = :productsId
+            AND wholesale_product_id = :wholesaleProductId
+            AND platform = :platform
+        `;
+
+        const existingRecord = await db.query(checkQuery, {
+            replacements: {
+                productsId: optionSettings.productsId,
+                wholesaleProductId: optionSettings.wholesaleProductId,
+                platform: optionSettings.platform,
+            },
+            type: Sequelize.QueryTypes.SELECT,
+            transaction: t,
+        });
+
+        let query;
+        if (existingRecord && existingRecord.length > 0) {
+            // UPDATE 쿼리
+            query = `
+                UPDATE selper.platform_product_options
+                SET 
+                    option_type = :optionType,
+                    option_name = :optionName,
+                    option_price = :optionPrice,
+                    option_stock = :optionStock,
+                    update_user = :updateUser,
+                    update_dt = CURRENT_TIMESTAMP
+                WHERE 
+                    products_id = :productsId
+                    AND wholesale_product_id = :wholesaleProductId
+                    AND platform = :platform
+            `;
+        } else {
+            // INSERT 쿼리
+            query = `
+                INSERT INTO selper.platform_product_options
+                (
+                    products_id,
+                    wholesale_product_id,
+                    option_type,
+                    platform,
+                    option_name,
+                    option_price,
+                    option_stock,
+                    create_user,
+                    create_dt,
+                    update_user,
+                    update_dt
+                )
+                VALUES
+                (
+                    :productsId,
+                    :wholesaleProductId,
+                    :optionType,
+                    :platform,
+                    :optionName,
+                    :optionPrice,
+                    :optionStock,
+                    :createUser,
+                    CURRENT_TIMESTAMP,
+                    :updateUser,
+                    CURRENT_TIMESTAMP
+                )
+            `;
+        }
+
+        const result = await db.query(query, {
+            replacements: optionSettings,
+            type: Sequelize.QueryTypes.INSERT,
+            transaction: t,
+        });
+
+        await t.commit(); // 트랜잭션 커밋
+        return result;
+    } catch (error) {
+        await t.rollback(); // 에러 발생 시 롤백
+        console.error('Error executing postOptionSettings query:', error);
         throw error;
     }
 };

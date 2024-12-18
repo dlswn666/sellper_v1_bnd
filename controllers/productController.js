@@ -400,7 +400,6 @@ export const getProductOption = async (req, res) => {
     }
 
     try {
-        console.log('오류 확인1');
         const result = await productModel.getProductOption(whereCondition, parseInt(limit), parseInt(offset));
         let productsData = await Promise.all(
             result.map(async (product) => {
@@ -411,8 +410,27 @@ export const getProductOption = async (req, res) => {
                 };
             })
         );
-        console.log('오류 확인2');
         res.status(200).json(productsData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const getOptionSettings = async (req, res) => {
+    const data = req.body;
+    try {
+        const result = await productModel.getOptionSettings(data);
+        res.status(200).json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const postOptionSettings = async (req, res) => {
+    const data = req.body;
+    try {
+        const result = await productModel.postOptionSettings(data);
+        res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

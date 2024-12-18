@@ -22,4 +22,6 @@ router.put('/putPlatformPrice', productController.putPlatformPrice);
 router.get('/getProductAttributeData', productController.getProductAttributeData);
 router.get('/getProductDetailImage', productController.getProductDetailImage);
 router.get('/getProductOption', productController.getProductOption);
+router.get('/getOptionSettings', productController.getOptionSettings);
+router.post('/postOptionSettings', productController.postOptionSettings);
 export default router;
