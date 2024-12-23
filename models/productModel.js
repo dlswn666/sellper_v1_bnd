@@ -798,7 +798,7 @@ export const getCategory = async (data) => {
 export const postProcessCategory = async (data) => {
     const { productId, categoryId, platformId } = data;
 
-    // 필수 파���미터 검증
+    // 필수 파라미터 검증
     if (!productId || !categoryId) {
         throw new Error('필수 파라미터가 누락되었습니다.');
     }
@@ -1207,7 +1207,6 @@ export const putPlatformPrice = async (data) => {
 };
 
 export const putProductPrice = async (data) => {
-    console.log('*************************data', data);
     const { productsId, salePrice, discountPrice } = data[0];
     const replacements = {
         productId: productsId,
@@ -1448,19 +1447,24 @@ export const getProductOption = async (whereCondition, limit, offset) => {
 };
 
 export const getOptionSettings = async (optionSettings) => {
+    const { productsId, wholesaleProductId, platform, createUser } = optionSettings;
+    const replacements = {
+        productsId: productsId,
+        wholesaleProductId: wholesaleProductId,
+        platform: platform,
+        createUser: createUser,
+    };
     const query = `
         SELECT 
-            option_id as optionId,
             products_id as productsId,
             option_type as optionType,
             platform as platform,
             option_name as optionName,
+            option_value as optionValue,
             option_price as optionPrice,
             option_stock as optionStock,
             create_user as createUser,
             create_dt as createDt,
-            update_user as updateUser,
-            update_dt as updateDt,
             wholesale_product_id as wholesaleProductId
         FROM selper.platform_product_options
         WHERE products_id = :productsId
@@ -1470,7 +1474,7 @@ export const getOptionSettings = async (optionSettings) => {
     `;
     try {
         const result = await db.query(query, {
-            replacements: optionSettings,
+            replacements,
             type: Sequelize.QueryTypes.SELECT,
         });
         return result;
@@ -1480,91 +1484,183 @@ export const getOptionSettings = async (optionSettings) => {
     }
 };
 
-export const postOptionSettings = async (optionSettings) => {
-    const t = await db.transaction(); // 트랜잭션 시작
+export const postOptionSettings = async (optionSettingsArray) => {
+    const t = await db.transaction();
 
     try {
-        // 기존 데이터 확인
-        const checkQuery = `
-            SELECT products_id 
-            FROM selper.platform_product_options
+        // 기존 데이터 삭제
+        const deleteQuery = `
+            DELETE FROM selper.platform_product_options
             WHERE products_id = :productsId
             AND wholesale_product_id = :wholesaleProductId
             AND platform = :platform
         `;
 
-        const existingRecord = await db.query(checkQuery, {
+        await db.query(deleteQuery, {
             replacements: {
-                productsId: optionSettings.productsId,
-                wholesaleProductId: optionSettings.wholesaleProductId,
-                platform: optionSettings.platform,
+                productsId: optionSettingsArray[0].productsId,
+                wholesaleProductId: optionSettingsArray[0].wholesaleProductId,
+                platform: optionSettingsArray[0].platform,
             },
-            type: Sequelize.QueryTypes.SELECT,
+            type: Sequelize.QueryTypes.DELETE,
             transaction: t,
         });
 
-        let query;
-        if (existingRecord && existingRecord.length > 0) {
-            // UPDATE 쿼리
-            query = `
-                UPDATE selper.platform_product_options
-                SET 
-                    option_type = :optionType,
-                    option_name = :optionName,
-                    option_price = :optionPrice,
-                    option_stock = :optionStock,
-                    update_user = :updateUser,
-                    update_dt = CURRENT_TIMESTAMP
-                WHERE 
-                    products_id = :productsId
-                    AND wholesale_product_id = :wholesaleProductId
-                    AND platform = :platform
-            `;
-        } else {
-            // INSERT 쿼리
-            query = `
-                INSERT INTO selper.platform_product_options
-                (
-                    products_id,
-                    wholesale_product_id,
-                    option_type,
-                    platform,
-                    option_name,
-                    option_price,
-                    option_stock,
-                    create_user,
-                    create_dt,
-                    update_user,
-                    update_dt
-                )
-                VALUES
-                (
-                    :productsId,
-                    :wholesaleProductId,
-                    :optionType,
-                    :platform,
-                    :optionName,
-                    :optionPrice,
-                    :optionStock,
-                    :createUser,
-                    CURRENT_TIMESTAMP,
-                    :updateUser,
-                    CURRENT_TIMESTAMP
-                )
-            `;
+        // 새로운 데이터 일괄 삽입
+        const insertQuery = `
+            INSERT INTO selper.platform_product_options
+            (
+                option_id,
+                products_id,
+                wholesale_product_id,
+                option_type,
+                platform,
+                option_name,
+                option_value,
+                option_price,
+                option_stock,
+                create_user,
+                create_dt
+            )
+            VALUES
+            (
+                :optionId,
+                :productsId,
+                :wholesaleProductId,
+                :optionType,
+                :platform,
+                :optionName,
+                :optionValue,
+                :optionPrice,
+                :optionStock,
+                :createUser,
+                CURRENT_TIMESTAMP
+            )
+        `;
+
+        for (const optionSetting of optionSettingsArray) {
+            await db.query(insertQuery, {
+                replacements: optionSetting,
+                type: Sequelize.QueryTypes.INSERT,
+                transaction: t,
+            });
         }
 
-        const result = await db.query(query, {
-            replacements: optionSettings,
-            type: Sequelize.QueryTypes.INSERT,
-            transaction: t,
-        });
+        await t.commit();
+        return { success: true, message: '옵션 설정이 성공적으로 저장되었습니다.' };
+    } catch (error) {
+        await t.rollback();
+        console.error('Error executing postOptionSettings query:', error);
+        throw error;
+    }
+};
 
-        await t.commit(); // 트랜잭션 커밋
+export const putProductStage = async (productStage) => {
+    const { productId, stage } = productStage;
+    const replacements = {
+        productId: productId,
+        stage: stage,
+    };
+    const query = `
+        UPDATE products
+        SET stage = :stage
+        WHERE product_id = :productId
+    `;
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.UPDATE });
         return result;
     } catch (error) {
-        await t.rollback(); // 에러 발생 시 롤백
-        console.error('Error executing postOptionSettings query:', error);
+        console.error('Error executing putProductStage query:', error);
+        throw error;
+    }
+};
+
+export const getDeliveryCompanies = async () => {
+    const query = `
+        SELECT 
+            delivery_info_id as deliveryInfoId,
+            delivery_company_name as deliveryCompanyName,
+            delivery_company_code as deliveryCompanyCode
+        FROM delivery_company_info
+    `;
+    try {
+        const result = await db.query(query, { type: Sequelize.QueryTypes.SELECT });
+        return result;
+    } catch (error) {
+        console.error('Error executing getDeliveryCompanies query:', error);
+        throw error;
+    }
+};
+
+export const getNaverProductPoint = async (productsId) => {
+    const query = `
+        select 
+            point_id as pointId,
+            product_id as productId,
+            text_review_point as reviewPointText,
+            video_review_point as reviewPointPhoto,
+            month_text_review_point as reviewPointTextMonth,
+            month_video_review_point as reviewPointPhotoMonth
+        from naver_point_info
+        where product_id = :productsId
+    `;
+    try {
+        const result = await db.query(query, {
+            replacements: { productsId },
+            type: Sequelize.QueryTypes.SELECT,
+        });
+        return result;
+    } catch (error) {
+        console.error('Error executing getNaverProductPoint query:', error);
+        throw error;
+    }
+};
+
+export const postNaverProductPoint = async (naverProductPoint) => {
+    const { productsId, reviewPointText, reviewPointPhoto, reviewPointTextMonth, reviewPointPhotoMonth } =
+        naverProductPoint;
+    const replacements = {
+        productsId: productsId,
+        reviewPointText: reviewPointText,
+        reviewPointPhoto: reviewPointPhoto,
+        reviewPointTextMonth: reviewPointTextMonth,
+        reviewPointPhotoMonth: reviewPointPhotoMonth,
+    };
+    console.log(naverProductPoint);
+    const query = `
+    INSERT INTO selper.naver_point_info
+        (point_id, product_id, text_review_point, video_review_point, month_text_review_point, month_video_review_point)
+        VALUES(uuid(), :productsId, :reviewPointText, :reviewPointPhoto, :reviewPointTextMonth, :reviewPointPhotoMonth)
+    `;
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.INSERT });
+        return result;
+    } catch (error) {
+        console.error('Error executing postNaverProductPoint query:', error);
+        throw error;
+    }
+};
+
+export const putNaverProductPoint = async (naverProductPoint) => {
+    const { productsId, reviewPointText, reviewPointPhoto, reviewPointTextMonth, reviewPointPhotoMonth } =
+        naverProductPoint;
+    const replacements = {
+        productsId: productsId,
+        reviewPointText: reviewPointText,
+        reviewPointPhoto: reviewPointPhoto,
+        reviewPointTextMonth: reviewPointTextMonth,
+        reviewPointPhotoMonth: reviewPointPhotoMonth,
+    };
+    const query = `
+        UPDATE naver_point_info
+        SET text_review_point = :reviewPointText, video_review_point = :reviewPointPhoto, month_text_review_point = :reviewPointTextMonth, month_video_review_point = :reviewPointPhotoMonth
+        WHERE product_id = :productsId
+    `;
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.UPDATE });
+        return result;
+    } catch (error) {
+        console.error('Error executing putNaverProductPoint query:', error);
         throw error;
     }
 };

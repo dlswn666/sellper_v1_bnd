@@ -323,8 +323,16 @@ export const getPlatformPriceById = async (req, res) => {
         if (!productId) {
             return res.status(400).json({ error: 'Product ID is required' });
         }
-
+        console.log('productId', productId);
         const result = await productModel.getPlatformPriceById(productId);
+        const naverProductPoint = await productModel.getNaverProductPoint(productId);
+        console.log('naverProductPoint', naverProductPoint);
+        if (naverProductPoint) {
+            for (const item of result) {
+                item.naverProductPoint = naverProductPoint;
+            }
+        }
+        console.log('result', result);
         res.status(200).json(result);
     } catch (err) {
         console.error('Error in getPlatformPriceById controller:', err);
@@ -338,6 +346,14 @@ export const putPlatformPrice = async (req, res) => {
         const result = await productModel.putPlatformPrice(data);
         if (result) {
             await productModel.putProductPrice(data);
+        }
+        if (data[0].platformId.trim() === 'naver') {
+            const naverProductPoint = await productModel.getNaverProductPoint(data[0].productsId);
+            if (naverProductPoint.length > 0) {
+                await productModel.putNaverProductPoint(data[0]);
+            } else {
+                await productModel.postNaverProductPoint(data[0]);
+            }
         }
         res.status(200).json({ result: result, message: 'success' });
     } catch (err) {
@@ -417,7 +433,7 @@ export const getProductOption = async (req, res) => {
 };
 
 export const getOptionSettings = async (req, res) => {
-    const data = req.body;
+    const data = req.query;
     try {
         const result = await productModel.getOptionSettings(data);
         res.status(200).json(result);
@@ -428,9 +444,20 @@ export const getOptionSettings = async (req, res) => {
 
 export const postOptionSettings = async (req, res) => {
     const data = req.body;
+    console.log('data', data);
     try {
         const result = await productModel.postOptionSettings(data);
-        res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
+        res.status(200).json({ success: true, message: '저장이 완료 되었습니다.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// 택배사 조회
+export const getDeliveryCompanies = async (req, res) => {
+    try {
+        const result = await productModel.getDeliveryCompanies();
+        res.status(200).json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -10,7 +10,6 @@ tokenManager.registerProvider('naver', {
     expiresIn: 3 * 60 * 60 * 1000, // 3시간
     refreshThreshold: 30 * 60 * 1000, // 30분
     onTokenExpiring: async (provider, tokenInfo) => {
-        console.log(`Naver token expiring: ${tokenInfo.token}`);
         try {
             const newToken = await getAccessToken();
             tokenManager.setToken(provider, newToken);
@@ -42,7 +41,6 @@ export const getAccessToken = async (req, res) => {
         data.append('client_secret_sign', signature);
         data.append('type', 'SELF');
         data.toString();
-        console.log(data);
         const response = await axios.post(
             `${process.env.NAVER_API_BASE_URL}${process.env.NAVER_API_VERSION}/oauth2/token`,
             data,
@@ -53,7 +51,6 @@ export const getAccessToken = async (req, res) => {
             }
         );
         tokenManager.setToken('naver', response.data.access_token);
-        console.log(response.data);
         return response.data.access_token;
     } catch (error) {
         console.error('Naver token error', error);
@@ -65,7 +62,6 @@ export const getAccessToken = async (req, res) => {
 export const getProductAttributeValues = async (req, res) => {
     try {
         const categoryId = req.params.categoryId;
-        console.log(categoryId);
         if (!categoryId) {
             return res.status(400).json({ error: 'Category ID is required' });
         }
@@ -79,7 +75,6 @@ export const getProductAttributeValues = async (req, res) => {
                 console.error('Failed to refresh Naver token', error);
             }
         }
-        console.log('naver token*********************************', token);
         const response = await axios.get(
             `${process.env.NAVER_API_BASE_URL}${process.env.NAVER_API_VERSION}/product-attributes/attribute-values?categoryId=${categoryId}`,
             {
@@ -89,7 +84,6 @@ export const getProductAttributeValues = async (req, res) => {
                 },
             }
         );
-        console.log('naver product attribute values', response.data);
         res.status(200).json(response.data);
     } catch (error) {
         console.error('Naver product attributes error', error);
@@ -100,7 +94,6 @@ export const getProductAttributeValues = async (req, res) => {
 export const getProductAttributes = async (req, res) => {
     try {
         const categoryId = req.params.categoryId;
-        console.log(categoryId);
         if (!categoryId) {
             return res.status(400).json({ error: 'Category ID is required' });
         }
@@ -112,7 +105,6 @@ export const getProductAttributes = async (req, res) => {
                 console.error('Failed to refresh Naver token', error);
             }
         }
-        console.log('naver token*********************************', token);
         const response = await axios.get(
             `${process.env.NAVER_API_BASE_URL}${process.env.NAVER_API_VERSION}/product-attributes/attributes?categoryId=${categoryId}`,
             {
@@ -126,5 +118,25 @@ export const getProductAttributes = async (req, res) => {
     } catch (error) {
         console.error('Naver product attributes error', error);
         throw error;
+    }
+};
+
+// 원산지 조회
+export const getOriginAreaInfo = async (req, res) => {
+    try {
+        const token = tokenManager.getToken('naver');
+        const response = await axios.get(
+            `${process.env.NAVER_API_BASE_URL}${process.env.NAVER_API_VERSION}/product-origin-areas`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+        res.status(200).json(response.data);
+    } catch (error) {
+        console.error('Naver origin area info error', error);
+        res.status(500).json({ error: error.message });
     }
 };

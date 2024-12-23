@@ -24,4 +24,5 @@ router.get('/getProductDetailImage', productController.getProductDetailImage);
 router.get('/getProductOption', productController.getProductOption);
 router.get('/getOptionSettings', productController.getOptionSettings);
 router.post('/postOptionSettings', productController.postOptionSettings);
+router.get('/getDeliveryCompanies', productController.getDeliveryCompanies);
 export default router;
