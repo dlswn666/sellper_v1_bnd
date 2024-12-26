@@ -270,7 +270,6 @@ export const putProductCategory = async (req, res) => {
 export const getProductById = async (req, res) => {
     const { id } = req.query;
     try {
-        console.log('error?');
         const result = await productModel.getProductById(id);
         res.status(200).json(result);
     } catch (err) {
@@ -323,16 +322,13 @@ export const getPlatformPriceById = async (req, res) => {
         if (!productId) {
             return res.status(400).json({ error: 'Product ID is required' });
         }
-        console.log('productId', productId);
         const result = await productModel.getPlatformPriceById(productId);
         const naverProductPoint = await productModel.getNaverProductPoint(productId);
-        console.log('naverProductPoint', naverProductPoint);
         if (naverProductPoint) {
             for (const item of result) {
                 item.naverProductPoint = naverProductPoint;
             }
         }
-        console.log('result', result);
         res.status(200).json(result);
     } catch (err) {
         console.error('Error in getPlatformPriceById controller:', err);
@@ -407,8 +403,6 @@ export const getProductDetailImage = async (req, res) => {
 export const getProductOption = async (req, res) => {
     const { productId, limit = 100, offset = 0 } = req.query;
 
-    console.log(req.query);
-
     let whereCondition = {};
 
     if (productId) {
@@ -444,7 +438,6 @@ export const getOptionSettings = async (req, res) => {
 
 export const postOptionSettings = async (req, res) => {
     const data = req.body;
-    console.log('data', data);
     try {
         const result = await productModel.postOptionSettings(data);
         res.status(200).json({ success: true, message: '저장이 완료 되었습니다.' });
@@ -460,5 +453,17 @@ export const getDeliveryCompanies = async (req, res) => {
         res.status(200).json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+};
+
+// 상품 상세 정보 저장
+export const postProductAttribute = async (req, res) => {
+    const data = req.body;
+    try {
+        console.log('data', data);
+        const result = await productModel.postWholesaleProductAttribute(data);
+        res.status(200).json({ success: true, message: '저장이 완료 되었습니다.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
     }
 };

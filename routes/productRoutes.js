@@ -25,4 +25,5 @@ router.get('/getProductOption', productController.getProductOption);
 router.get('/getOptionSettings', productController.getOptionSettings);
 router.post('/postOptionSettings', productController.postOptionSettings);
 router.get('/getDeliveryCompanies', productController.getDeliveryCompanies);
+router.post('/postProductAttribute', productController.postProductAttribute);
 export default router;

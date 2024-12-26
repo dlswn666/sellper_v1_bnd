@@ -223,8 +223,6 @@ export const postAutoReco = async () => {
 
         // 각 searchWord에 대해 순차적으로 searchNaverShopping 실행
         for (const { id, searchWord } of searchWords) {
-            console.log(`Processing search word: ${searchWord}`);
-
             // Naver 쇼핑 검색 호출
             let resultData = await searchNaverShopping.searchNaverShopping(searchWord);
             resultData.id = id;

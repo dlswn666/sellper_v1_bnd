@@ -59,8 +59,6 @@ export const searchNaverShopping = async (data) => {
             return Array.from(anchors).map((anchor) => anchor.textContent.trim());
         });
 
-        console.log(relatedTagsTexts);
-
         // 페이지 스크롤
         await autoScroll(page);
 
@@ -115,7 +113,6 @@ async function getPageData(page) {
                 try {
                     const text = await response.text();
                     const jsonData = JSON.parse(text);
-                    console.log(jsonData);
                     resolve(jsonData);
                 } catch (error) {
                     reject(error);
@@ -239,12 +236,6 @@ function expandObject(data) {
         .sort((a, b) => b[1] - a[1])
         .map((entry) => entry[0])
         .join(', '); // 배열을 문자열로 변환
-
-    console.log('productNum', productNum);
-    console.log('productName', productName);
-    console.log('productTags', productTags);
-    console.log('cateId', cateId);
-    console.log('cateNam', cateNam);
 
     return {
         productNum, // 총 상품 수 (문자열)
