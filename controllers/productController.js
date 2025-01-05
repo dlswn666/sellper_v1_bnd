@@ -2,6 +2,11 @@ import * as productModel from '../models/productModel.js';
 import { v4 as uuid4 } from 'uuid';
 import Queue from 'bull';
 import { addSearchJob } from '../queue/producer.js';
+import { postProductThumbnail } from '../models/productModel.js';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { createUploader, IMAGE_TYPES, handleFileUpload } from '../config/imageUpload.js';
 
 export const getSelectProductData = async (req, res) => {
     const { search = '', limit = 50, page = 1 } = req.query;
@@ -15,6 +20,16 @@ export const getSelectProductData = async (req, res) => {
 
     try {
         let product = await productModel.getProducts(data);
+        let result = product.result;
+        console.log('result', result);
+        let thumbnailData = await Promise.all(
+            result.map(async (item) => {
+                let thumbnail = await productModel.getThumbNailData(item.productId);
+                return { ...item, thumbnail };
+            })
+        );
+        product.result = thumbnailData;
+        product.total = product.total;
 
         res.status(200).json(product);
     } catch (err) {
@@ -358,7 +373,7 @@ export const putPlatformPrice = async (req, res) => {
 };
 
 export const getProductAttributeData = async (req, res) => {
-    const { productId, search, limit = 100, offset = 0 } = req.query;
+    const { productId, search, limit = 100, offset = 0, flag = '' } = req.query;
 
     let whereCondition = {};
 
@@ -383,8 +398,21 @@ export const getProductAttributeData = async (req, res) => {
                 };
             })
         );
-
-        res.status(200).json(productsData);
+        console.log('*******************************************', flag);
+        if (flag === 'thumbnail') {
+            let uploadThumbnailData = await Promise.all(
+                productsData.map(async (product) => {
+                    let uploadThumbnail = await productModel.getProductThumbnail(product.wholesaleProductId);
+                    return {
+                        ...product,
+                        uploadThumbnail,
+                    };
+                })
+            );
+            res.status(200).json(uploadThumbnailData);
+        } else {
+            res.status(200).json(productsData);
+        }
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -465,5 +493,121 @@ export const postProductAttribute = async (req, res) => {
         res.status(200).json({ success: true, message: '저장이 완료 되었습니다.' });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// 이미지 업로드
+
+export const postProductThumbnailController = async (req, res) => {
+    try {
+        console.log('req.body', req.body);
+        const uploader = createUploader({
+            imageType: IMAGE_TYPES.THUMBNAIL,
+            fileNamer: (file, req) => {
+                let paramWholesaleProductId = req.body?.wholesaleProductId || req.query.wholesaleProductId;
+                paramWholesaleProductId = 'thumbnail';
+
+                return `product-${paramWholesaleProductId}-${Date.now()}${path.extname(file.originalname)}`;
+            },
+        });
+
+        // 파일 업로드 처리
+        const uploadedFiles = await handleFileUpload(uploader, IMAGE_TYPES.THUMBNAIL)(req, res);
+
+        // DB에 저장
+        await productModel.postProductThumbnail({
+            wholesaleProductId: req.body.wholesaleProductId,
+            thumbnail: uploadedFiles,
+            imgUploadPlatform: 'naver',
+        });
+
+        res.status(200).json({
+            success: true,
+            message: '이미지가 성공적으로 업로드되었습니다.',
+            data: uploadedFiles,
+        });
+    } catch (err) {
+        console.error('Error in postProductThumbnailController:', err);
+        res.status(500).json({
+            success: false,
+            message: err.message || '이미지 업로드 중 오류가 발생했습니다.',
+        });
+    }
+};
+
+// 상품 이미지 조회
+export const getProductThumbnail = async (req, res) => {
+    const { wholesaleProductId } = req.query;
+    try {
+        const result = await productModel.getProductThumbnail(wholesaleProductId);
+        res.status(200).json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// 상품 최종 정보 조회
+export const getFinalProductData = async (req, res) => {
+    try {
+        const { limit, page, productId, searchTerm } = req.query;
+        const platformIds = ['naver', 'coupang', 'elevenst', 'gmarket'];
+
+        // 파라미터 유효성 검사 및 기본값 설정
+        const params = {
+            limit: parseInt(limit) || 100,
+            page: parseInt(page) || 1,
+            productId: productId || '',
+            searchTerm: searchTerm || '',
+        };
+
+        let finalProductData = await productModel.getFinalProductData(params);
+        const productData = await Promise.all(
+            finalProductData.map(async (product) => {
+                let productThumbnail = await productModel.getProductThumbnail(product.wholesaleProductId);
+
+                // 카테고리 정보를 객체로 변환
+                const productCategory = {};
+                const platformProductPrice = {};
+                const platformProductOption = {};
+                const platformProductAttribute = {};
+                await Promise.all(
+                    platformIds.map(async (platformId) => {
+                        const category = await productModel.getProductCategory(product.productId, platformId);
+                        const price = await productModel.getProductPlatformPrice(product.productId, platformId);
+                        const option = await productModel.getProductPlatformOption(product.productId, platformId);
+                        const attribute = await productModel.getProductAttribute(
+                            product.wholesaleProductId,
+                            platformId
+                        );
+                        platformProductPrice[platformId] = price;
+                        productCategory[platformId] = category;
+                        platformProductOption[platformId] = option;
+                        platformProductAttribute[platformId] = attribute;
+                    })
+                );
+
+                // 옵션 가격 조회는 all 한번 더 조회
+                const allOption = await productModel.getProductPlatformOption(product.productId, 'all');
+                platformProductOption.all = allOption;
+
+                const platformProductNaverPoint = await productModel.getProductNaverPoint(product.productId);
+                const platformProductDeliveryInfo = await productModel.getDeliveryInfo(product.wholesaleSiteId);
+
+                return {
+                    ...product,
+                    productThumbnail,
+                    productCategory,
+                    platformProductPrice,
+                    platformProductOption,
+                    platformProductNaverPoint,
+                    platformProductDeliveryInfo,
+                    platformProductAttribute,
+                };
+            })
+        );
+        res.status(200).json(productData);
+    } catch (error) {
+        console.error('Error in getFinalProductData controller:', error);
+        res.status(500).json({ error: error.message });
     }
 };
