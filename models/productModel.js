@@ -1669,121 +1669,155 @@ export const putNaverProductPoint = async (naverProductPoint) => {
 };
 
 export const postWholesaleProductAttribute = async (wholesaleProductAttribute) => {
-    /**
-     * 원산지 정보 저장
-     * 인증 정보 저장
-     * INSERT INTO selper.wholesesale_product_attribute
-     * (attribute_id, wholesale_product_id, attribute_type, attribute_group, attribute_value, attribute_name, platform_id)
-     *  VALUES('', '', '', '', '', '', '');
-     *
-     */
-
-    const { wholesaleProductId, certificationList, selectedAttributes, originArea } = wholesaleProductAttribute;
-
-    const modifiedAttributes = [
-        // 원산지 정보
-        {
-            attributeId: uuid4(),
-            wholesaleProductId: wholesaleProductId,
-            attributeType: '원산지',
-            attributeTypeCode: 'AREA',
-            attributeGroupCode: '04',
-            attributeGroupValue: '기타-직접 입력',
-            attributeCode: originArea.originNation,
-            attributeValue: originArea.originArea,
-            platformId: 'naver',
-        },
-        // 인증 정보
-        ...certificationList.map((certification) => ({
-            attributeId: uuid4(),
-            wholesaleProductId: wholesaleProductId,
-            attributeType: '인증',
-            attributeTypeCode: 'CERTI',
-            attributeGroupCode: certification.certInfo,
-            attributeGroupValue: certification.certInfoName,
-            attributeCode: certification.agency,
-            attributeValue: certification.number,
-            platformId: 'naver',
-        })),
-        // 상품 속성 정보
-        ...selectedAttributes.map((selectedAttribute) => ({
-            attributeId: uuid4(),
-            wholesaleProductId: wholesaleProductId,
-            attributeType: '상품속성',
-            attributeTypeCode: 'PROATT',
-            attributeGroupCode: selectedAttribute.attributeSeq,
-            attributeGroupValue: selectedAttribute.attributeName,
-            attributeCode: selectedAttribute.attributeValueSeq,
-            attributeValue: selectedAttribute.minAttributeValue,
-            platformId: 'naver',
-        })),
-    ];
-
     try {
-        // attribute_type : 속성 타입 ( 원산지, 인증, 상품속성 )
-        // attribute_group : 속성 그룹 ( 국내/해외, 국가, 인증, 상품속성)
-        // attribute_value : 속성 값 ( 국내/해외 코드, 국가코드, 인증종류코드, 상품속성코드 )
-        // attribute_name : 속성 이름 ( 원산지, 인증종류명, 상품속성명 )
-        // platform_id : 플랫폼 아이디 ( 1, 2, 3, 4, 5 )
+        const {
+            wholesaleProductId,
+            certificationList = [],
+            selectedAttributes = [],
+            originArea = {},
+        } = wholesaleProductAttribute || {};
 
-        // SELECT attribute_id, wholesale_product_id, attribute_type, attribute_group_code, attribute_group_value, attribute_code, attribute_value, platform_id
-        // FROM selper.wholesesale_product_attribute;
-        const selectQuery = `
-            SELECT 
-                wpa.attribute_id as attributeId,
-                wpa.wholesale_product_id as wholesaleProductId,
-                wpa.attribute_type as attributeType,
-                wpa.attribute_type_code as attributeTypeCode,
-                wpa.attribute_group_code as attributeGroupCode,
-                wpa.attribute_group_value as attributeGroupValue,
-                wpa.attribute_code as attributeCode,
-                wpa.attribute_value as attributeValue,
-                wpa.platform_id as platformId
-            FROM wholesesale_product_attribute wpa
-            WHERE wpa.wholesale_product_id = :wholesaleProductId
-        `;
-        const selectResult = await db.query(selectQuery, {
-            replacements: { wholesaleProductId },
-            type: Sequelize.QueryTypes.SELECT,
-        });
-
-        if (selectResult.length > 0) {
-            const deleteQuery = `
-                DELETE FROM wholesesale_product_attribute
-                WHERE wholesale_product_id = :wholesaleProductId
-            `;
-            await db.query(deleteQuery, { replacements: { wholesaleProductId }, type: Sequelize.QueryTypes.DELETE });
+        // wholesaleProductId 체크
+        if (!wholesaleProductId) {
+            throw new Error('wholesaleProductId는 필수 값입니다.');
         }
 
-        const insertQuery = `
-            INSERT INTO wholesesale_product_attribute
-            (attribute_id, 
-                wholesale_product_id, 
-                attribute_type, 
-                attribute_type_code,
-                attribute_group_code, 
-                attribute_group_value, 
-                attribute_code, 
-                attribute_value, 
-                platform_id)
-            VALUES(:attributeId, 
-                :wholesaleProductId, 
-                :attributeType, 
-                :attributeTypeCode,
-                :attributeGroupCode, 
-                :attributeGroupValue, 
-                :attributeCode, 
-                :attributeValue, 
-                :platformId)
-        `;
+        const modifiedAttributes = [
+            // 원산지 정보 - originArea가 존재하고 필수값이 있는 경우만 추가
+            ...(originArea?.originNation && originArea?.originArea
+                ? [
+                      {
+                          attributeId: uuid4(),
+                          wholesaleProductId,
+                          attributeType: '원산지',
+                          attributeTypeCode: 'AREA',
+                          attributeGroupCode: '04',
+                          attributeGroupValue: '기타-직접 입력',
+                          attributeCode: originArea.originNation,
+                          attributeValue: originArea.originArea,
+                          platformId: 'naver',
+                      },
+                  ]
+                : []),
 
-        for (const attribute of modifiedAttributes) {
-            await db.query(insertQuery, { replacements: attribute, type: Sequelize.QueryTypes.INSERT });
+            // 인증 정보 - certificationList가 존재하고 배열인 경우만 매핑
+            ...(Array.isArray(certificationList) && certificationList.length > 0
+                ? certificationList
+                      .filter((cert) => cert.certInfo && cert.certInfoName && cert.agency && cert.number)
+                      .map((certification) => ({
+                          attributeId: uuid4(),
+                          wholesaleProductId,
+                          attributeType: '인증',
+                          attributeTypeCode: 'CERTI',
+                          attributeGroupCode: certification.certInfo,
+                          attributeGroupValue: certification.certInfoName,
+                          attributeCode: certification.agency,
+                          attributeValue: certification.number,
+                          platformId: 'naver',
+                      }))
+                : []),
+
+            // 상품 속성 - selectedAttributes가 존재하고 배열인 경우만 매핑
+            ...(Array.isArray(selectedAttributes) && selectedAttributes.length > 0
+                ? selectedAttributes
+                      .filter(
+                          (attr) =>
+                              attr.attributeSeq &&
+                              attr.attributeName &&
+                              attr.attributeValueSeq &&
+                              attr.minAttributeValue
+                      )
+                      .map((selectedAttribute) => ({
+                          attributeId: uuid4(),
+                          wholesaleProductId,
+                          attributeType: '상품속성',
+                          attributeTypeCode: 'PROATT',
+                          attributeGroupCode: selectedAttribute.attributeSeq,
+                          attributeGroupValue: selectedAttribute.attributeName,
+                          attributeCode: selectedAttribute.attributeValueSeq,
+                          attributeValue: selectedAttribute.minAttributeValue,
+                          platformId: 'naver',
+                      }))
+                : []),
+        ];
+
+        const t = await db.transaction();
+
+        try {
+            const validAttributes = modifiedAttributes.filter(
+                (attr) =>
+                    attr.attributeId &&
+                    attr.wholesaleProductId &&
+                    attr.attributeType &&
+                    attr.attributeTypeCode &&
+                    attr.attributeGroupCode &&
+                    attr.attributeGroupValue &&
+                    attr.attributeCode &&
+                    attr.attributeValue &&
+                    attr.platformId
+            );
+
+            console.log('Valid attributes after filtering:', validAttributes);
+
+            if (validAttributes.length > 0) {
+                const insertQuery = `
+                    INSERT INTO wholesesale_product_attribute (
+                        attribute_id,
+                        wholesale_product_id,
+                        attribute_type,
+                        attribute_type_code,
+                        attribute_group_code,
+                        attribute_group_value,
+                        attribute_code,
+                        attribute_value,
+                        platform_id
+                    ) VALUES (
+                        :attributeId,
+                        :wholesaleProductId,
+                        :attributeType,
+                        :attributeTypeCode,
+                        :attributeGroupCode,
+                        :attributeGroupValue,
+                        :attributeCode,
+                        :attributeValue,
+                        :platformId
+                    )
+                `;
+
+                for (const attribute of validAttributes) {
+                    try {
+                        await db.query(insertQuery, {
+                            replacements: attribute,
+                            type: Sequelize.QueryTypes.INSERT,
+                            transaction: t,
+                        });
+                    } catch (insertError) {
+                        console.error('Error during insert:', insertError);
+                        throw insertError;
+                    }
+                }
+
+                await t.commit();
+                return {
+                    success: true,
+                    message: `상품 상세 정보가 성공적으로 저장되었습니다. (${validAttributes.length}건)`,
+                    processedCount: validAttributes.length,
+                };
+            } else {
+                await t.commit();
+                return {
+                    success: true,
+                    message: '저장할 유효한 데이터가 없습니다.',
+                    processedCount: 0,
+                };
+            }
+        } catch (error) {
+            console.error('Transaction error:', error);
+            await t.rollback();
+            throw error;
         }
-
-        return { success: true, message: '상품 상세 정보가 성공적으로 저장되었습니다.' };
     } catch (error) {
-        console.error('Error executing postWholesaleProductAttribute query:', error);
+        console.error('Overall function error:', error);
         throw error;
     }
 };
