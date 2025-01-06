@@ -3,13 +3,25 @@
 .env.development.local
 .env.test.local
 .env.production.local
-.jpg
-.png
-.gif
-.svg
-.webp
-.ico
-.bmp
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.svg
+*.webp
+*.ico
+*.bmp
 .tiff
-.ico
+*.ico
 
+# 특정 폴더의 jpg 파일 무시
+images/*.jpg
+images/*.jpeg
+images/*.png
+images/*.gif
+images/*.svg
+images/*.webp
+images/*.ico
+images/*.bmp
+
+images/znt/thumbnail/znt_1/thumbnailImg_1_0_znt.jpg
