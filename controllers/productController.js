@@ -39,6 +39,7 @@ export const getSelectProductData = async (req, res) => {
 
 export const putWorkingData = async (req, res) => {
     const data = req.body;
+    const transaction = await productModel.startTransaction();
     try {
         if (data) {
             // 데이터가 존재할 경우
@@ -53,16 +54,21 @@ export const putWorkingData = async (req, res) => {
                 const platformChargeData = await productModel.getPlatformCharge();
                 const targetProfitRatio = 0.3; // 순이익 비율 (30%)
                 const taxRatio = 0.16; // 세금 비율 (16%)
-                const discountRatio = 0.3;
+                const discountRatio = 0.3; // 할인 비율 (30%)
 
                 // 플랫폼별 판매 가격 설정
                 await Promise.all(
                     platformChargeData.map(async (data) => {
                         try {
-                            let feeRatioString = data.charge_rate; // '6%' 같은 형식의 문자열
+                            // 가격 파싱
+
+                            let feeRatioString = data.chargeRate; // '6%' 같은 형식의 문자열
                             let feeRatio = parseFloat(feeRatioString.replace('%', '')) / 100; // '%'를 제거하고 소수로 변환
                             const productPriceString = item.productPrice;
                             let productPrice = parseInt(productPriceString.replace('원', '').replace(',', ''), 10);
+
+                            const margin_price = Math.floor(productPrice * targetProfitRatio);
+                            const tax_price = Math.floor(productPrice * taxRatio);
 
                             // 플랫폼 수수료액 자동 계산 - (마진금액 + 세금액) * 플랫폼 수수료율
                             const platForm_price = parseInt((margin_price + tax_price) * feeRatio);
@@ -74,17 +80,14 @@ export const putWorkingData = async (req, res) => {
 
                             const price = productPrice + margin_price + tax_price + platForm_price + discount_price;
 
-                            // 마진금액 자동 계산 - 판매가 * 순이익 비율
-                            const margin_price = (price * targetProfitRatio) / 100;
-                            // 세금액 자동 계산 - 판매가 * 세금 비율
-                            const tax_price = parseInt(price * taxRatio);
-
-                            const platformId = data.id;
+                            const platformId = data.platformInfoId;
+                            const platformName = data.platformName;
 
                             // 각 플랫폼에 맞는 가격 데이터 생성
                             const paramData = {
                                 productsUuid,
                                 platformId,
+                                platformName,
                                 price,
                                 targetProfitRatio,
                                 margin_price,
@@ -98,18 +101,25 @@ export const putWorkingData = async (req, res) => {
                             // 비동기 작업 - 플랫폼 가격 정보 저장
                             await productModel.postPlatformPrice(paramData);
                         } catch (err) {
-                            console.error(`Platform ${platformData.id} 가격 계산 실패: `, err);
+                            await transaction.rollback();
+                            console.error(`Platform ${data.platformInfoId} 가격 계산 실패: `, err);
                         }
                     })
                 );
             }
         }
+
+        // 모든 작업 성공시 트랜잭션 커밋
+        await transaction.commit();
+
         // 저장 성공 시 응답
-        return res.status(200).json({ message: '저장이 완료 되었습니다.' });
+        return res.status(200).json({ success: true, message: '저장이 완료 되었습니다.' });
     } catch (error) {
         // 오류 처리
         console.error('Error occure putWorkingData: ', error);
-        return res.status(500).json({ message: '저장에 실패하였습니다.' });
+        // 오류 발생시 트랜잭션 롤백
+        await transaction.rollback();
+        return res.status(500).json({ success: false, message: '저장에 실패하였습니다.' });
     }
 };
 
@@ -132,9 +142,11 @@ export const getProductData = async (req, res) => {
         let productsData = await Promise.all(
             searchResult.map(async (product) => {
                 let thumbnail = await productModel.getThumbNailData(product.productId);
+                let detailImage = await productModel.getDetailImageData(product.productId);
                 return {
                     ...product,
                     thumbnail,
+                    detailImage,
                 };
             })
         );
@@ -146,22 +158,12 @@ export const getProductData = async (req, res) => {
     }
 };
 
-export const getSearchWord = async (req, res) => {
-    try {
-        const searchWord = await productModel.getSearchWord(req.params.productId);
-
-        res.status(200).json(searchWord);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
-
 export const postSearchWord = async (req, res) => {
     const data = req.body;
     try {
         const result = await productModel.postSearchWord(data);
+        // const job = addSearchJob(data);
 
-        // addSearchJob(data);
         res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
     } catch (err) {
         res.status(500).json({ error: err.message });

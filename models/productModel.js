@@ -3,6 +3,10 @@ import { Sequelize } from 'sequelize';
 import { v4 as uuid4 } from 'uuid';
 import { selectProductData } from '../../sellper_v1/src/apis/productsApi.js';
 
+export const startTransaction = async () => {
+    return await db.transaction();
+};
+
 export const getProducts = async (data) => {
     const { search, offset, limit } = data;
     try {
@@ -91,8 +95,8 @@ export const putWorkingProduct = async (data) => {
         await db.query(
             `
             INSERT INTO selper.products
-                (product_id, wholesale_product_id, create_user, create_dt)
-                VALUES(:productsUuid, :productId,'selper', CURRENT_TIMESTAMP);
+                (product_id, wholesale_product_id, create_user, create_dt, stage)
+                VALUES(:productsUuid, :productId,'selper', CURRENT_TIMESTAMP, 'ST');
         `,
             {
                 replacements: {
@@ -237,7 +241,8 @@ export const postSearchWord = async (data) => {
 
     try {
         const postQuery = `update products 
-                    set search_word = :curValue
+                    set search_word = :curValue,
+                    stage = 'SW'
                     where product_id = :id`;
         let postReplacements = {};
         postReplacements.curValue = curValue;
@@ -318,6 +323,7 @@ export const getDetailImageData = async (productId) => {
             path as dtlImgPath
             FROM selper.wholesale_product_dtl_img
             where wholesale_product_id = :productId
+            order by dtl_img_url asc
             `,
             {
                 replacements: { productId: `${productId}` },
@@ -335,11 +341,12 @@ export const getPlatformCharge = async () => {
     try {
         const platformChargeData = await db.query(
             `
-                SELECT id, 
-	            platform_name, 
-	            platform_url, 
-	            platform_info,
-	            charge_rate
+                SELECT 
+                platform_info_id as platformInfoId, 
+	            platform_name as platformName, 
+	            platform_url as platformUrl, 
+	            platform_info as platformInfo,
+	            charge_rate as chargeRate
                 FROM selper.platform_info;
             `,
             {
@@ -367,11 +374,16 @@ export const postPlatformPrice = async (data) => {
         discount_price,
     } = data;
     const uuid = uuid4();
+    /*INSERT INTO selper.platform_price
+(platform_price_id, products_id, platform_id, price, margin_percent, margin_price, tax_percent, tax_price, create_dt, platform_percent, platform_price, discount_price, update_dt, update_user)
+VALUES('', '', '', 0, 30, 0, 0, 0, CURRENT_TIMESTAMP, 0, 0, 0, CURRENT_TIMESTAMP, '');
+    */
+
     try {
         let query = `
            INSERT INTO selper.platform_price
-            (platform_pricd_id, 
-            product_id, 
+            (platform_price_id, 
+            products_id, 
             platform_id, 
             price, 
             margin_percent, 
@@ -1674,9 +1686,11 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
             attributeId: uuid4(),
             wholesaleProductId: wholesaleProductId,
             attributeType: '원산지',
-            attributeGroup: '04',
+            attributeTypeCode: 'AREA',
+            attributeGroupCode: '04',
+            attributeGroupValue: '기타-직접 입력',
+            attributeCode: originArea.originNation,
             attributeValue: originArea.originArea,
-            attributeName: originArea.originNation,
             platformId: 'naver',
         },
         // 인증 정보
@@ -1684,9 +1698,11 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
             attributeId: uuid4(),
             wholesaleProductId: wholesaleProductId,
             attributeType: '인증',
-            attributeGroup: certification.certInfo,
-            attributeValue: certification.agency,
-            attributeName: certification.number,
+            attributeTypeCode: 'CERTI',
+            attributeGroupCode: certification.certInfo,
+            attributeGroupValue: certification.certInfoName,
+            attributeCode: certification.agency,
+            attributeValue: certification.number,
             platformId: 'naver',
         })),
         // 상품 속성 정보
@@ -1694,9 +1710,11 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
             attributeId: uuid4(),
             wholesaleProductId: wholesaleProductId,
             attributeType: '상품속성',
-            attributeGroup: selectedAttribute.attributeSeq,
-            attributeValue: selectedAttribute.attributeValueSeq,
-            attributeName: selectedAttribute.minAttributeValue,
+            attributeTypeCode: 'PROATT',
+            attributeGroupCode: selectedAttribute.attributeSeq,
+            attributeGroupValue: selectedAttribute.attributeName,
+            attributeCode: selectedAttribute.attributeValueSeq,
+            attributeValue: selectedAttribute.minAttributeValue,
             platformId: 'naver',
         })),
     ];
@@ -1707,18 +1725,21 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
         // attribute_value : 속성 값 ( 국내/해외 코드, 국가코드, 인증종류코드, 상품속성코드 )
         // attribute_name : 속성 이름 ( 원산지, 인증종류명, 상품속성명 )
         // platform_id : 플랫폼 아이디 ( 1, 2, 3, 4, 5 )
+
+        // SELECT attribute_id, wholesale_product_id, attribute_type, attribute_group_code, attribute_group_value, attribute_code, attribute_value, platform_id
+        // FROM selper.wholesesale_product_attribute;
         const selectQuery = `
             SELECT 
                 wpa.attribute_id as attributeId,
                 wpa.wholesale_product_id as wholesaleProductId,
                 wpa.attribute_type as attributeType,
-                wpa.attribute_group as attributeGroup,
+                wpa.attribute_type_code as attributeTypeCode,
+                wpa.attribute_group_code as attributeGroupCode,
+                wpa.attribute_group_value as attributeGroupValue,
+                wpa.attribute_code as attributeCode,
                 wpa.attribute_value as attributeValue,
-                wpa.attribute_name as attributeName,
                 wpa.platform_id as platformId
             FROM wholesesale_product_attribute wpa
-            LEFT JOIN wholesesale_product_attribute_detail wpad
-            ON wpa.attribute_id = wpad.attribute_id
             WHERE wpa.wholesale_product_id = :wholesaleProductId
         `;
         const selectResult = await db.query(selectQuery, {
@@ -1736,8 +1757,24 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
 
         const insertQuery = `
             INSERT INTO wholesesale_product_attribute
-            (attribute_id, wholesale_product_id, attribute_type, attribute_group, attribute_value, attribute_name, platform_id)
-            VALUES(:attributeId, :wholesaleProductId, :attributeType, :attributeGroup, :attributeValue, :attributeName, :platformId)
+            (attribute_id, 
+                wholesale_product_id, 
+                attribute_type, 
+                attribute_type_code,
+                attribute_group_code, 
+                attribute_group_value, 
+                attribute_code, 
+                attribute_value, 
+                platform_id)
+            VALUES(:attributeId, 
+                :wholesaleProductId, 
+                :attributeType, 
+                :attributeTypeCode,
+                :attributeGroupCode, 
+                :attributeGroupValue, 
+                :attributeCode, 
+                :attributeValue, 
+                :platformId)
         `;
 
         for (const attribute of modifiedAttributes) {
@@ -1751,51 +1788,333 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
     }
 };
 
-export const getProductAttribute = async (wholesaleProductId) => {
+export const getProductAttribute = async (wholesaleProductId, platformId) => {
     try {
-        const query = `
+        let query = `
             SELECT 
                 attribute_id as attributeId,
                 wholesale_product_id as wholesaleProductId,
                 attribute_type as attributeType,
-                attribute_group as attributeGroup,
+                attribute_type_code as attributeTypeCode,
+                attribute_group_code as attributeGroupCode,
+                attribute_group_value as attributeGroupValue,
+                attribute_code as attributeCode,
                 attribute_value as attributeValue,
-                attribute_name as attributeName,
                 platform_id as platformId
             FROM wholesesale_product_attribute WHERE wholesale_product_id = :wholesaleProductId
         `;
+
+        if (platformId) {
+            query += ` AND platform_id = :platformId`;
+        }
+
         const result = await db.query(query, {
-            replacements: { wholesaleProductId },
+            replacements: { wholesaleProductId, platformId },
             type: Sequelize.QueryTypes.SELECT,
         });
-        const data = result.data;
         const certificationList = [];
         const selectedAttributes = [];
         const originArea = [];
 
-        data.forEach((item) => {
-            if (item.attributeType === '인증') {
+        result.forEach((item) => {
+            if (item.attributeTypeCode === 'CERTI') {
                 certificationList.push({
-                    certInfo: item.attributeGroup,
-                    agency: item.attributeValue,
-                    number: item.attributeName,
+                    certInfo: item.attributeGroupCode,
+                    certInfoName: item.attributeGroupValue,
+                    agency: item.attributeCode,
+                    number: item.attributeValue,
                 });
-            } else if (item.attributeType === '원산지') {
+            } else if (item.attributeTypeCode === 'AREA') {
                 originArea.push({
                     originArea: item.attributeValue,
-                    originNation: item.attributeName,
+                    originNation: item.attributeCode,
                 });
-            } else if (item.attributeType === '상품속성') {
+            } else if (item.attributeTypeCode === 'PROATT') {
                 selectedAttributes.push({
-                    attributeSeq: item.attributeGroup,
-                    attributeValueSeq: item.attributeValue,
-                    minAttributeValue: item.attributeName,
+                    attributeSeq: item.attributeGroupCode,
+                    attributeName: item.attributeGroupValue,
+                    attributeValueSeq: item.attributeCode,
+                    minAttributeValue: item.attributeValue,
                 });
             }
         });
         return { certificationList, selectedAttributes, originArea };
     } catch (error) {
         console.error('Error executing getProductAttribute query:', error);
+        throw error;
+    }
+};
+
+export const postProductThumbnail = async (productThumbnail) => {
+    const { wholesaleProductId, thumbnail, imgUploadPlatform = 'naver' } = productThumbnail;
+    const query = `
+    INSERT INTO selper.platform_thumbnail
+    (platform_thumbnail_id, wholesale_product_id, img_name, img_path, img_upload_platform)
+    VALUES(:platformThumbnailId, :wholesaleProductId, :imgName, :imgPath, :imgUploadPlatform);`;
+
+    try {
+        const result = await Promise.all(
+            thumbnail.map(async (item) => {
+                const replacements = {
+                    platformThumbnailId: uuid4(),
+                    wholesaleProductId,
+                    imgName: item.fileName,
+                    imgPath: item.filePath,
+                    imgUploadPlatform,
+                };
+                const insertResult = await db.query(query, { replacements, type: Sequelize.QueryTypes.INSERT });
+                return insertResult;
+            })
+        );
+        return result;
+    } catch (error) {
+        console.error('Error executing postProductThumbnail query:', error);
+        throw error;
+    }
+};
+
+export const getProductThumbnail = async (wholesaleProductId) => {
+    const query = `
+        SELECT wholesale_product_id as wholesaleProductId,
+               img_name as imgName,
+               img_path as imgPath,
+               img_upload_platform as imgUploadPlatform
+        FROM platform_thumbnail
+        WHERE wholesale_product_id = :wholesaleProductId
+    `;
+    try {
+        const result = await db.query(query, {
+            replacements: { wholesaleProductId },
+            type: Sequelize.QueryTypes.SELECT,
+        });
+        return result;
+    } catch (error) {
+        console.error('Error executing getProductThumbnail query:', error);
+        throw error;
+    }
+};
+
+export const getFinalProductData = async (param) => {
+    let { limit, page, productId, searchTerm } = param;
+    const offset = (page - 1) * limit;
+    let checkSearchTerm = '';
+    if (searchTerm) {
+        checkSearchTerm = `%${searchTerm}%`;
+    }
+    let replacements = {
+        productId,
+        searchTerm: checkSearchTerm,
+        limit,
+        offset,
+    };
+    console.log(replacements);
+    let query = `
+        SELECT 
+            p.wholesale_product_id as wholesaleProductId,
+            p.product_id as productId, 
+            p.product_name as productName,  
+            p.product_price as productPrice,
+            p.is_discount as isDiscount,
+            p.platform_keyword as platformKeyword,
+            p.platform_tag as platformTag,
+            p.discount_charge as discountCharge,
+            wp.product_code as productCode,
+            wp.wholesale_site_id as wholesaleSiteId,
+            wp.product_price as wholesaleProductPrice,
+            wp.detail_page_url as detailPageUrl,
+            wsi.site_name as siteName
+        FROM products p
+        LEFT OUTER JOIN wholesale_product wp
+            ON p.wholesale_product_id = wp.wholesale_product_id 
+        LEFT OUTER JOIN wholesale_site_info wsi 
+            ON wp.wholesale_site_id = wsi.wholesale_site_id 
+        WHERE 1=1
+        AND p.product_name IS NOT NULL
+        AND p.product_price IS NOT NULL
+    `;
+
+    if (productId) {
+        query += ` AND p.product_id = :productId`;
+    }
+
+    if (searchTerm) {
+        query += ` AND p.product_name LIKE :searchTerm`;
+    }
+
+    query += ` LIMIT :limit OFFSET :offset`;
+
+    try {
+        const result = await db.query(query, {
+            replacements,
+            type: Sequelize.QueryTypes.SELECT,
+        });
+        return result;
+    } catch (error) {
+        console.error('Error executing getFinalProductData query:', error);
+        throw error;
+    }
+};
+
+export const getProductCategory = async (productId, platformId) => {
+    const query = `
+        SELECT 
+            ppc.product_id, 
+            pc.category_id, 
+            pc.category_num, 
+            pc.category_no1, 
+            pc.category_no2, 
+            pc.category_no3, 
+            pc.category_no4, 
+            pc.category_no5, 
+            pc.category_no6  
+        FROM processed_product_category ppc
+        INNER JOIN platform_category pc 
+        ON ppc.naver_category_id = pc.category_id
+        WHERE ppc.product_id = :productId
+        AND pc.platform_id = :platformId
+    `;
+    const replacements = {
+        productId,
+        platformId,
+    };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.SELECT });
+        return result;
+    } catch (error) {
+        console.error('Error executing getProductCategory query:', error);
+        throw error;
+    }
+};
+
+export const getProductPlatformPrice = async (productId, platformId) => {
+    /**
+     *         SELECT platform_price_id, products_id, platform_id, price, margin_percent, margin_price, tax_percent, tax_price, create_dt, platform_percent, platform_price, discount_price, update_dt, update_user
+     *         FROM selper.platform_price;
+     */
+    const query = `
+        SELECT 
+            platform_price_id as platformPriceId,
+            products_id as productsId,
+            platform_id as platformId,
+            price as price,
+            margin_percent as marginPercent,
+            margin_price as marginPrice,
+            tax_percent as taxPercent,
+            tax_price as taxPrice,
+            platform_percent as platformPercent,
+            platform_price as platformPrice,
+            discount_price as discountPrice
+        FROM platform_price 
+        WHERE products_id = :productId
+        AND platform_id = :platformId
+    `;
+    const replacements = { productId, platformId };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.SELECT });
+        return result;
+    } catch (error) {
+        console.error('Error executing getProductPlatformPrice query:', error);
+        throw error;
+    }
+};
+
+export const getProductPlatformOption = async (productId, platformId) => {
+    const query = `
+        SELECT 
+            products_id as productsId, 
+            option_type as optionType, 
+            platform as platform, 
+            option_name as optionName, 
+            option_value as optionValue, 
+            option_price as optionPrice, 
+            option_stock as optionStock 
+        FROM platform_product_options ppo 
+        WHERE products_id = :productId
+        AND platform = :platformId
+    `;
+    const replacements = { productId, platformId };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.SELECT });
+        return result;
+    } catch (error) {
+        console.error('Error executing getProductPlatformOption query:', error);
+        throw error;
+    }
+};
+
+export const getProductNaverPoint = async (productId) => {
+    /**
+     *         SELECT point_id, product_id, text_review_point, video_review_point, month_text_review_point, month_video_review_point
+     *         FROM selper.naver_point_info;
+     */
+    const query = `
+        SELECT 
+            point_id as pointId,
+            product_id as productId,
+            text_review_point as textReviewPoint,
+            video_review_point as videoReviewPoint,
+            month_text_review_point as monthTextReviewPoint,
+            month_video_review_point as monthVideoReviewPoint
+        FROM naver_point_info
+        WHERE product_id = :productId
+    `;
+    const replacements = { productId };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.SELECT });
+        return result;
+    } catch (error) {
+        console.error('Error executing getProductNaverPoint query:', error);
+        throw error;
+    }
+};
+
+export const getDeliveryInfo = async (wholesaleSiteId) => {
+    const query = `
+        SELECT 
+            wsdi.wholesesale_site_id as wholesesaleSiteId,
+            wsi.site_name as siteName, 
+            wsi.site_url as siteUrl,
+            dci.delivery_company_name as deliveryCompanyName, 
+            dci.delivery_company_code as deliveryCompanyCode,
+            wsdi.delivery_type as deliveryType,
+            c1.code_name AS deliveryTypeName,         
+            wsdi.delivery_att_type as deliveryAttType,
+            c2.code_name AS deliveryAttTypeName,     
+            wsdi.delivery_fee_type as deliveryFeeType,
+            c3.code_name AS deliveryFeeTypeName,     
+            wsdi.delivery_pay_type as deliveryPayType,
+            c4.code_name AS deliveryPayTypeName,     
+            wsdi.return_delivery_company as returnDeliveryCompany,
+            c5.code_name AS returnDeliveryCompanyName, 
+            wsdi.delivery_base_fee as deliveryBaseFee,
+            wsdi.free_condition_amount as freeConditionAmount,
+            wsdi.extra_delivery_fee as extraDeliveryFee,
+            wsdi.return_delivery_fee as returnDeliveryFee,
+            wsdi.dispatch_location as dispatchLocation,
+            wsdi.return_delivery_location as returnDeliveryLocation
+        FROM wholesesale_site_delivery_info wsdi
+        LEFT JOIN wholesale_site_info wsi 
+            ON wsi.wholesale_site_id = wsdi.wholesesale_site_id
+        LEFT JOIN delivery_company_info dci 
+            ON dci.delivery_company_code = wsdi.delivery_info_id
+        LEFT JOIN common_code c1
+            ON c1.code = wsdi.delivery_type
+        LEFT JOIN common_code c2
+            ON c2.code = wsdi.delivery_att_type
+        LEFT JOIN common_code c3
+            ON c3.code = wsdi.delivery_fee_type
+        LEFT JOIN common_code c4
+            ON c4.code = wsdi.delivery_pay_type
+        LEFT JOIN common_code c5
+            ON c5.code = wsdi.return_delivery_company
+        WHERE wsdi.wholesesale_site_id = :wholesaleSiteId
+    `;
+    const replacements = { wholesaleSiteId };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.SELECT });
+        return result;
+    } catch (error) {
+        console.error('Error executing getDeliveryInfo query:', error);
         throw error;
     }
 };
