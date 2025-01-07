@@ -107,20 +107,6 @@ export const putWorkingProduct = async (data) => {
                 transaction: t,
             }
         );
-        await db.query(
-            `
-                INSERT INTO selper.products_his
-                (product_his_id, stage, update_dt, update_user)
-                VALUES(:productsUuid, 'ST', CURRENT_TIMESTAMP, 'selper');
-            `,
-            {
-                replacements: {
-                    productsUuid,
-                },
-                type: Sequelize.QueryTypes.INSERT,
-                transaction: t,
-            }
-        );
 
         t.commit();
     } catch (error) {
@@ -280,23 +266,6 @@ export const postSearchWord = async (data) => {
             type: Sequelize.QueryTypes.UPDATE,
             transaction: t,
         });
-
-        await db.query(
-            `
-                INSERT INTO selper.products_his
-                (product_his_id, stage, pre_value, cur_value, update_dt, update_user)
-                VALUES(:id, 'SW', :preValue, :curValue, CURRENT_TIMESTAMP, 'selper');
-            `,
-            {
-                replacements: {
-                    id,
-                    preValue,
-                    curValue,
-                },
-                type: Sequelize.QueryTypes.INSERT,
-                transaction: t,
-            }
-        );
 
         const searchResult = await db.query(
             `
@@ -591,7 +560,8 @@ export const putProductName = async (data) => {
             UPDATE selper.products 
             SET product_name = :productName,
                 update_dt = now(),
-            update_user = 'selper'
+                stage = 'PN',
+                update_user = 'selper'
             WHERE product_id = :productId
         `;
 
@@ -604,6 +574,7 @@ export const putProductName = async (data) => {
             replacements,
             type: Sequelize.QueryTypes.UPDATE,
         });
+
         // 리턴값 추가
         if (result > 0) {
             return { success: true, message: 'Product name updated successfully.' };
@@ -832,7 +803,7 @@ export const getCategory = async (data) => {
 
 export const postProcessCategory = async (data) => {
     const { productId, categoryId, platformId } = data;
-
+    console.log('data', data);
     // 필수 파라미터 검증
     if (!productId || !categoryId) {
         throw new Error('필수 파라미터가 누락되었습니다.');
@@ -1026,7 +997,7 @@ export const getProductById = async (id) => {
     `;
     try {
         const result = await db.query(checkQuery, {
-            replacements: { id },
+            replacements: { productId: id },
             type: Sequelize.QueryTypes.SELECT,
         });
         return result;
