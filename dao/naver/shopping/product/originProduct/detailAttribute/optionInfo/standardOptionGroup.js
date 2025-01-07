@@ -23,7 +23,7 @@
  * @returns {Object} optionStandard
  */
 
-export function createStandardOption(data = {}) {
+export function createStandardOptionGroup(data = {}) {
     const { standardOptionGroups, optionStandards } = data;
     // 예시 데이터
     // const defaultStandardOption = {

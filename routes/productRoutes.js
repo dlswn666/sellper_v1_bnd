@@ -29,4 +29,6 @@ router.post('/postProductAttribute', productController.postProductAttribute);
 router.post('/postProductThumbnail', productController.postProductThumbnailController);
 router.get('/getProductThumbnail', productController.getProductThumbnail);
 router.get('/getFinalProductData', productController.getFinalProductData);
+router.post('/postNaverProductThumbnail', productController.postNaverProductThumbnail);
+
 export default router;

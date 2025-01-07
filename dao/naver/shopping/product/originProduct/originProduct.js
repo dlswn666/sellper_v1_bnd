@@ -4,7 +4,7 @@
 // DOC: https://apicenter.commerce.naver.com/ko/basic/commerce-api#tag/%EC%83%81%ED%92%88/operation/createProduct.product
 
 import { createImages } from './images.js';
-import { createDetailAttributes } from './detailAttributes.js';
+import { createDetailAttribute } from './detailAttribute/detailAttribute.js';
 import { createCustomerBenefit } from './customerBenefit/customerBenefit.js';
 import { createDeliveryInfo } from './deliveryInfo/deliveryInfo.js';
 
@@ -59,7 +59,7 @@ import { createDeliveryInfo } from './deliveryInfo/deliveryInfo.js';
  */
 export function createBaseInfo(data) {
     const images = createImages(data.images);
-    const detailAttributes = createDetailAttributes(data.detailAttributes);
+    const detailAttributes = createDetailAttribute(data.detailAttributes);
     const customerBenefit = createCustomerBenefit(data.customerBenefit);
     const deliveryInfo = createDeliveryInfo(data.deliveryInfo);
 
@@ -70,8 +70,8 @@ export function createBaseInfo(data) {
         name: data.name, // 상품명(필수)
         detailContent: data.detailContent, // 상품 상세 정보(필수)
         images, // 이미지 정보(필수), {representativeImage: {url:...}, optionalImages: [...]}
-        saleStartDate: data.saleStartDate, // 판매 시작일(필수)
-        saleEndDate: data.saleEndDate, // 판매 종료일(필수)
+        saleStartDate: data.saleStartDate, // 판매 시작일
+        saleEndDate: data.saleEndDate, // 판매 종료일
         salePrice: data.salePrice, // 판매 가격(필수)
         stockQuantity: data.stockQuantity, // 재고 수량(필수)
         deliveryInfo, // 배송 정보(필수)

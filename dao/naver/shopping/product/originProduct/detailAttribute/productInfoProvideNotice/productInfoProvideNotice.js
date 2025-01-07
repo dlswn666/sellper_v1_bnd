@@ -1,42 +1,42 @@
 // productInfoProvideNotice.js
 // @description: detailAttribute 내 productInfoProvideNotice 객체를 생성하는 함수
 
-import { createWear } from './wear';
-import { createShoes } from './shoes';
-import { createBag } from './bag';
-import { createFashionItems } from './fashionItems';
-import { createSleepingGear } from './sleepingGear';
-import { createFurniture } from './furniture';
-import { createImageAppliances } from './imageAppliances';
-import { createHomeAppliances } from './homeAppliances';
-import { createSeasonAppliances } from './seasonAppliances';
-import { createOfficeAppliances } from './officeAppliances';
-import { createOpticsAppliances } from './opticsAppliances';
-import { createMicroElectronics } from './microElectronics';
-import { createNavigation } from './navigation';
-import { createCarArticles } from './carArticles';
-import { createMedicalAppliances } from './medicalAppliances';
-import { createKitchenUtensils } from './kitchenUtensils';
-import { createCosmetic } from './cosmetic';
-import { createJewellery } from './jewellery';
-import { createFood } from './food';
-import { createGeneralFood } from './generalFood';
-import { createDietFood } from './dietFood';
-import { createKids } from './kids';
-import { createMusicalInstrument } from './musicalInstrument';
-import { createSportsEquipment } from './sportsEquipment';
-import { createBooks } from './books';
-import { createRentalEtc } from './rentalEtc';
-import { createRentalHa } from './rentalHa';
-import { createDigitalContents } from './digitalContents';
-import { createGiftCard } from './giftCard';
-import { createMobileCoupon } from './mobileCoupon';
-import { createMovieShow } from './movieShow';
-import { createEtcService } from './etcService';
-import { createBiochemistry } from './biochemistry';
-import { createBiocidal } from './biocidal';
-import { createCellPhone } from './cellPhone';
-import { createEtc } from './etc';
+import { createWear } from './wear.js';
+import { createShoes } from './shoes.js';
+import { createBag } from './bag.js';
+import { createFashionItems } from './fashionItems.js';
+import { createSleepingGear } from './sleepingGear.js';
+import { createFurniture } from './furniture.js';
+import { createImageAppliances } from './imageAppliances.js';
+import { createHomeAppliances } from './homeAppliances.js';
+import { createSeasonAppliances } from './seasonAppliances.js';
+import { createOfficeAppliances } from './officeAppliances.js';
+import { createOpticsAppliances } from './opticsAppliances.js';
+import { createMicroElectronics } from './microElectronics.js';
+import { createNavigation } from './navigation.js';
+import { createCarArticles } from './carArticles.js';
+import { createMedicalAppliances } from './medicalAppliances.js';
+import { createKitchenUtensils } from './kitchenUtensils.js';
+import { createCosmetic } from './cosmetic.js';
+import { createJewellery } from './jewellery.js';
+import { createFood } from './food.js';
+import { createGeneralFood } from './generalFood.js';
+import { createDietFood } from './dietFood.js';
+import { createKids } from './kids.js';
+import { createMusicalInstrument } from './musicalInstrument.js';
+import { createSportsEquipment } from './sportsEquipment.js';
+import { createBook } from './book.js';
+import { createRentalEtc } from './rentalEtc.js';
+import { createRentalHa } from './rentalHa.js';
+import { createDigitalContents } from './digitalContents.js';
+import { createGiftCard } from './giftCard.js';
+import { createMobileCoupon } from './mobileCoupon.js';
+import { createMovieShow } from './movieShow.js';
+import { createEtcService } from './etcService.js';
+import { createBiochemistry } from './biochemistry.js';
+import { createBiocidal } from './biocidal.js';
+import { createCellPhone } from './cellPhone.js';
+import { createEtc } from './etc.js';
 
 /**
  * @function createProductInfoProvideNotice
@@ -133,7 +133,7 @@ export function createProductInfoProvideNotice(data = {}) {
         ...createKids(data),
         ...createMusicalInstrument(data),
         ...createSportsEquipment(data),
-        ...createBooks(data),
+        ...createBook(data),
         ...createRentalEtc(data),
         ...createRentalHa(data),
         ...createDigitalContents(data),

@@ -207,7 +207,7 @@ export const getSearchWordData = async (data) => {
     }
 };
 
-export const getThumbNailData = async (productId) => {
+export const getThumbNailData = async (productId, flag = 'nomal') => {
     try {
         let query = `
             SELECT 
@@ -224,6 +224,9 @@ export const getThumbNailData = async (productId) => {
             query += `where wholesale_product_id = :productId`;
             replacements.productId = `${productId}`;
         }
+        if (flag === 'upload') {
+            query += ` AND upload_yn != 'Y'`;
+        }
         const thumbNailData = await db.query(query, {
             replacements,
             type: Sequelize.QueryTypes.SELECT,
@@ -231,6 +234,30 @@ export const getThumbNailData = async (productId) => {
         return thumbNailData;
     } catch (error) {
         console.error('Error executing query:', error);
+        throw error;
+    }
+};
+
+export const getUploadThumbnail = async (wholesaleProductId, platformId) => {
+    try {
+        const query = `
+            SELECT img_url as imgUrl 
+            FROM platform_upload_img 
+            WHERE wholesale_product_id = :wholesaleProductId
+            AND platform_id = :platformId
+        `;
+
+        const results = await db.query(query, {
+            replacements: {
+                wholesaleProductId: wholesaleProductId,
+                platformId: platformId,
+            },
+            type: Sequelize.QueryTypes.SELECT,
+        });
+
+        return results;
+    } catch (error) {
+        console.error('Error in getUploadThumbnail:', error);
         throw error;
     }
 };
@@ -1675,6 +1702,7 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
             certificationList = [],
             selectedAttributes = [],
             originArea = {},
+            productInfoProvidedNoticeContents = [],
         } = wholesaleProductAttribute || {};
 
         // wholesaleProductId 체크
@@ -1739,7 +1767,24 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
                           platformId: 'naver',
                       }))
                 : []),
+            ...(Array.isArray(productInfoProvidedNoticeContents) && productInfoProvidedNoticeContents.length > 0
+                ? productInfoProvidedNoticeContents
+                      .filter((item) => item.fieldValue)
+                      .map((productInfoProvidedNoticeContent) => ({
+                          attributeId: uuid4(),
+                          wholesaleProductId,
+                          attributeType: '제공 정보',
+                          attributeTypeCode: 'PROINFO',
+                          attributeGroupCode: productInfoProvidedNoticeContent.productInfoProvidedNoticeType,
+                          attributeGroupValue: productInfoProvidedNoticeContent.productInfoProvidedNoticeTypeName,
+                          attributeCode: productInfoProvidedNoticeContent.fieldName,
+                          attributeValue: productInfoProvidedNoticeContent.fieldValue,
+                          platformId: 'naver',
+                      }))
+                : []),
         ];
+
+        console.log('modifiedAttributes********************///////////////////', modifiedAttributes);
 
         const t = await db.transaction();
 
@@ -1760,6 +1805,15 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
             console.log('Valid attributes after filtering:', validAttributes);
 
             if (validAttributes.length > 0) {
+                const deleteQuery = `
+                    DELETE FROM wholesesale_product_attribute WHERE wholesale_product_id = :wholesaleProductId
+                `;
+                await db.query(deleteQuery, {
+                    replacements: { wholesaleProductId },
+                    type: Sequelize.QueryTypes.DELETE,
+                    transaction: t,
+                });
+
                 const insertQuery = `
                     INSERT INTO wholesesale_product_attribute (
                         attribute_id,
@@ -1907,8 +1961,8 @@ export const postProductThumbnail = async (productThumbnail) => {
     }
 };
 
-export const getProductThumbnail = async (wholesaleProductId) => {
-    const query = `
+export const getProductThumbnail = async (wholesaleProductId, flag = 'nomal') => {
+    let query = `
         SELECT wholesale_product_id as wholesaleProductId,
                img_name as imgName,
                img_path as imgPath,
@@ -1916,6 +1970,9 @@ export const getProductThumbnail = async (wholesaleProductId) => {
         FROM platform_thumbnail
         WHERE wholesale_product_id = :wholesaleProductId
     `;
+    if (flag === 'upload') {
+        query += ` AND upload_yn != 'Y'`;
+    }
     try {
         const result = await db.query(query, {
             replacements: { wholesaleProductId },
@@ -2149,6 +2206,27 @@ export const getDeliveryInfo = async (wholesaleSiteId) => {
         return result;
     } catch (error) {
         console.error('Error executing getDeliveryInfo query:', error);
+        throw error;
+    }
+};
+
+export const updateProductThumbnail = async (productThumbnail) => {
+    const { wholesaleProductId, imgUrl, platformId } = productThumbnail;
+    console.log('productThumbnail', productThumbnail);
+    const query = `
+        INSERT INTO platform_upload_img (img_url, wholesale_product_id, platform_id)
+        VALUES (:imgUrl, :wholesaleProductId, :platformId)
+    `;
+    const replacements = {
+        imgUrl,
+        wholesaleProductId,
+        platformId,
+    };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.INSERT });
+        return result;
+    } catch (error) {
+        console.error('Error executing updateProductThumbnail query:', error);
         throw error;
     }
 };

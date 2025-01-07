@@ -502,13 +502,11 @@ export const postProductAttribute = async (req, res) => {
 
 export const postProductThumbnailController = async (req, res) => {
     try {
-        console.log('req.body', req.body);
         const uploader = createUploader({
             imageType: IMAGE_TYPES.THUMBNAIL,
             fileNamer: (file, req) => {
                 let paramWholesaleProductId = req.body?.wholesaleProductId || req.query.wholesaleProductId;
                 paramWholesaleProductId = 'thumbnail';
-
                 return `product-${paramWholesaleProductId}-${Date.now()}${path.extname(file.originalname)}`;
             },
         });
@@ -534,6 +532,61 @@ export const postProductThumbnailController = async (req, res) => {
             success: false,
             message: err.message || '이미지 업로드 중 오류가 발생했습니다.',
         });
+    }
+};
+
+// 네이버 이미지 업로드
+export const postNaverProductThumbnail = async (req, res) => {
+    const data = req.body;
+    console.log('data - postNaverProductThumbnail', data);
+    const wholesaleProductId = req.body.wholesaleProductId;
+
+    try {
+        const getProductThumbnailData = await productModel.getProductThumbnail(wholesaleProductId, 'upload');
+        const getThumbnailData = await productModel.getThumbNailData(wholesaleProductId, 'upload');
+        let thumbnailDataArray = [];
+        if (getProductThumbnailData.length > 0 && getThumbnailData.length > 0) {
+            console.log('확인');
+            getProductThumbnailData.forEach((item) => {
+                thumbnailDataArray.push(item.imgPath);
+            });
+            getThumbnailData.forEach((item) => {
+                thumbnailDataArray.push(item.thumbnailPath);
+            });
+            console.log('thumbnailDataArray', thumbnailDataArray);
+            const naverCommerceController = await import('./naverCommerceController.js');
+            const uploadNaverProductImage = await naverCommerceController.uploadNaverProductImage(
+                {
+                    body: {
+                        imageFiles: thumbnailDataArray,
+                    },
+                },
+                {
+                    status: () => {
+                        json: (data) => data;
+                    },
+                }
+            );
+
+            const updateData = uploadNaverProductImage.data.images.map((item) => {
+                return {
+                    wholesaleProductId: wholesaleProductId,
+                    imgUrl: item.url,
+                    platformId: 'naver',
+                };
+            });
+            await Promise.all(
+                updateData.map(async (item) => {
+                    await productModel.updateProductThumbnail(item);
+                })
+            );
+            res.status(200).json({ success: true, message: '업로드가 완료 되었습니다.' });
+        } else {
+            res.status(200).json({ success: true, message: '업로드할 이미지가 없습니다.' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+        console.error('Error in postNaverProductThumbnail controller:', err);
     }
 };
 

@@ -2,7 +2,7 @@
 // @description: deliveryInfo 내에 포함되는 deliveryFee 객체를 생성하는 함수
 // 실제 필드명, 필수/선택, ENUM 값은 DOC를 참조해 정확히 반영해야 함.
 
-import { createDeliveryFeeByArea } from './deliveryInfo.js';
+import { createDeliveryFeeByArea } from './deliveryFeeByArea.js';
 
 /**
  * @typedef {Object} DeliveryFeeByArea

@@ -1,7 +1,7 @@
-import { createStandardOptionGroup } from './standardOptionGroup';
-import { createStandardOption } from './standardOption';
-import { createCombinationOption } from './combinationOption';
-import { createSimpleOption } from './simpleOption';
+import { createStandardOptionGroup } from './standardOptionGroup.js';
+import { createCustomOption } from './customOption.js';
+import { createCombinationOption } from './combinationOption.js';
+import { createSimpleOption } from './simpleOption.js';
 
 /**
  * @param {Object} data
@@ -11,7 +11,7 @@ import { createSimpleOption } from './simpleOption';
 export function createOptionInfo(data = {}) {
     const optionInfo = {
         ...createStandardOptionGroup(data),
-        ...createStandardOption(data),
+        ...createCustomOption(data),
         ...createCombinationOption(data),
         ...createSimpleOption(data),
     };
@@ -19,4 +19,4 @@ export function createOptionInfo(data = {}) {
     return optionInfo;
 }
 
-export { createStandardOptionGroup, createStandardOption, createCombinationOption, createSimpleOption };
+export { createStandardOptionGroup, createCustomOption, createCombinationOption, createSimpleOption };

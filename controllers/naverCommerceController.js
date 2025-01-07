@@ -3,6 +3,12 @@ import axios from 'axios';
 import tokenManager from '../utils/tokenManager.js';
 import dotenv from 'dotenv';
 import { postNaverCategory, getNaverCategoryModel } from '../models/naverCommerceModels.js';
+import { createBaseInfo } from '../dao/naver/shopping/product/originProduct/originProduct.js';
+import { getThumbNailData, getUploadThumbnail } from '../models/productModel.js';
+import path from 'path';
+import fs from 'fs';
+import FormData from 'form-data';
+import { Blob } from 'buffer';
 
 dotenv.config();
 
@@ -246,4 +252,138 @@ export const getNaverCategoryList = async (req, res) => {
         console.error('Naver category list error', error);
         res.status(500).json({ error: error.message });
     }
+};
+
+// 상품 이미지 업로드
+export const uploadNaverProductImage = async (req) => {
+    try {
+        const { imageFiles } = req.body;
+        if (!imageFiles || !Array.isArray(imageFiles)) {
+            throw new Error('이미지 파일이 필요합니다.');
+        }
+
+        // 이미지 파일 경로 처리 및 버퍼 변환
+        const imagePromises = imageFiles.map(async (imagePath) => {
+            try {
+                let fullPath;
+                if (imagePath.startsWith('C:')) {
+                    fullPath = imagePath;
+                } else {
+                    fullPath = path.join(process.cwd(), imagePath.replace(/^\//, ''));
+                }
+
+                if (!fs.existsSync(fullPath)) {
+                    console.error(`파일이 존재하지 않습니다: ${fullPath}`);
+                    return null;
+                }
+
+                // Buffer로 직접 반환
+                const buffer = await fs.promises.readFile(fullPath);
+                return {
+                    buffer,
+                    filename: path.basename(imagePath),
+                };
+            } catch (error) {
+                console.error(`이미지 처리 중 오류 발생: ${imagePath}`, error);
+                return null;
+            }
+        });
+
+        const imageBuffers = (await Promise.all(imagePromises)).filter((img) => img !== null);
+
+        if (imageBuffers.length === 0) {
+            throw new Error('처리 가능한 이미지가 없습니다.');
+        }
+
+        const formData = new FormData();
+        imageBuffers.forEach(({ buffer, filename }) => {
+            // Buffer를 직접 FormData에 추가
+            formData.append('imageFiles', buffer, {
+                filename,
+                contentType: 'image/jpeg', // 또는 적절한 MIME 타입
+            });
+        });
+
+        const response = await executeWithTokenRetry(async (token) => {
+            return await axios.post(
+                `${process.env.NAVER_API_BASE_URL}${process.env.NAVER_API_VERSION}/product-images/upload`,
+                formData,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        ...formData.getHeaders(),
+                    },
+                }
+            );
+        });
+
+        return {
+            success: true,
+            message: '이미지가 성공적으로 업로드되었습니다.',
+            data: response.data,
+        };
+    } catch (error) {
+        console.error('네이버 상품 이미지 업로드 에러:', error);
+        throw error;
+    }
+};
+
+export const registerNaverProduct = async (req, res) => {
+    const productData = req.body;
+    await createNaverProduct(productData);
+    res.status(200).json({ message: 'success' });
+};
+
+const createNaverProduct = async (productData) => {
+    const detailImage = await getThumbNailData(productData.wholesaleProductId);
+    const detailContent = createDetailContent(detailImage);
+    const images = await createImages(productData.wholesaleProductId);
+
+    const naverProductData = {
+        statusType: 'FOR_SALE',
+        saleType: 'NEW',
+        leafCategoryId: productData.productCategory.naver[0].category_num,
+        name: productData.productName,
+        detailContent: detailContent,
+        images: images,
+        saleStartDate: '',
+        saleEndDate: '',
+        salePrice: parseInt(productData.productPrice),
+        stockQuantity: 100,
+    };
+
+    console.log(naverProductData);
+};
+
+const createDetailContent = (detailImage) => {
+    console.log(detailImage);
+    let detailContent = '';
+    detailImage.map((item) => {
+        detailContent += `<p>${item.thumbNailUrl}</p>`;
+    });
+    return detailContent;
+};
+
+const createImages = async (wholesaleProductId) => {
+    console.log('wholesaleProductId', wholesaleProductId);
+    const getUploadThumbnailData = await getUploadThumbnail(wholesaleProductId, 'naver');
+    let imgUrlArry = [];
+    getUploadThumbnailData.map((item) => {
+        imgUrlArry.push(item.imgUrl);
+    });
+    // 배열 순서 랜덤으로 섞어서 배치
+    imgUrlArry = imgUrlArry.sort(() => Math.random() - 0.5);
+    // 0-9 번째까지 남기고 나머지는 버림
+    imgUrlArry = imgUrlArry.slice(0, 10);
+    const representativeImage = { url: imgUrlArry[0] };
+    // representativeImage 제외하고 나머지 배열
+    const optionalImages = imgUrlArry.slice(1).map((item) => {
+        return { url: item };
+    });
+    return { representativeImage, optionalImages };
+};
+
+const createDetailAttribute = (productData) => {
+    const leafCategoryId = productData.productCategory.naver[0].category_num;
+    console.log(productData);
 };

@@ -10,4 +10,5 @@ router.get('/getOriginAreaInfo', naverCommerceController.getOriginAreaInfo);
 router.get('/getNaverCategory/:categoryId', naverCommerceController.getNaverCategory);
 router.get('/getNaverProductForProvidedNotice/:categoryId', naverCommerceController.getNaverProductForProvidedNotice);
 router.get('/getNaverCategoryList', naverCommerceController.getNaverCategoryList);
+router.post('/registerNaverProduct', naverCommerceController.registerNaverProduct);
 export default router;
