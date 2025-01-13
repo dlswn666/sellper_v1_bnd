@@ -12,8 +12,17 @@ const app = express();
 
 // 미들웨어 설정
 app.use(morgan('dev')); // 로그 기록
-app.use(cors()); // CORS 설정
-app.use(express.json()); // JSON 데이터 파싱
+
+// CORS 설정 최대 전송 크기 설정
+app.use(
+    cors({
+        maxBodySize: '50mb',
+    })
+);
+
+// body-parser 제한 크기 증가
+app.use(express.json({ limit: '50mb' })); // JSON 데이터 파싱
+app.use(express.urlencoded({ limit: '50mb', extended: true })); // URL 인코딩된 데이터 파싱
 
 // 정적 파일 제공을 위한 미들웨어 설정
 app.use('/images', express.static(path.join(process.cwd(), 'images')));

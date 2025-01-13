@@ -543,6 +543,7 @@ export const postNaverProductThumbnail = async (req, res) => {
 
     try {
         const getProductThumbnailData = await productModel.getProductThumbnail(wholesaleProductId, 'upload');
+        console.log('getProductThumbnailData', getProductThumbnailData);
         const getThumbnailData = await productModel.getThumbNailData(wholesaleProductId, 'upload');
         let thumbnailDataArray = [];
         if (getProductThumbnailData.length > 0 && getThumbnailData.length > 0) {

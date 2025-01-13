@@ -211,7 +211,7 @@ export const getThumbNailData = async (productId, flag = 'nomal') => {
             replacements.productId = `${productId}`;
         }
         if (flag === 'upload') {
-            query += ` AND upload_yn != 'Y'`;
+            query += ` AND (upload_yn != 'Y' OR upload_yn IS NULL)`;
         }
         const thumbNailData = await db.query(query, {
             replacements,
@@ -319,7 +319,7 @@ export const getDetailImageData = async (productId) => {
             path as dtlImgPath
             FROM selper.wholesale_product_dtl_img
             where wholesale_product_id = :productId
-            order by dtl_img_url asc
+            order by img_order asc
             `,
             {
                 replacements: { productId: `${productId}` },
@@ -803,7 +803,6 @@ export const getCategory = async (data) => {
 
 export const postProcessCategory = async (data) => {
     const { productId, categoryId, platformId } = data;
-    console.log('data', data);
     // 필수 파라미터 검증
     if (!productId || !categoryId) {
         throw new Error('필수 파라미터가 누락되었습니다.');
@@ -1015,6 +1014,7 @@ export const getProductPriceData = async (whereCondition, limit, offset) => {
             p.search_word AS searchWord,
             p.product_name AS productName,
             p.platform_tag AS platformTag,
+            p.product_price AS productPrice,
             wp.wholesale_site_id AS siteId,
             wp.product_code AS productCode,
             CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
@@ -1100,7 +1100,7 @@ export const getProductPriceData = async (whereCondition, limit, offset) => {
             coupangCategory IS NOT NULL OR 
             gmarketCategory IS NOT NULL OR 
             elevenstCategory IS NOT NULL
-    `;
+        ORDER BY CASE WHEN p.product_price IS NULL THEN 0 ELSE 1 END`;
     let replacements = {};
 
     if (whereCondition.productName) {
@@ -1429,6 +1429,17 @@ export const getProductOption = async (whereCondition, limit, offset) => {
         WHERE wpo.wholesale_product_id = :wholesaleProductId
     `;
 
+    const workedProductOptionQuery = `
+        SELECT option_id, 
+               wholesale_product_id, 
+               option_name, 
+               option_value, 
+               option_price, 
+               option_stock
+        FROM selper.wholesale_product_options
+        WHERE wholesale_product_id = :wholesaleProductId
+    `;
+
     try {
         const getProductOptionResult = await db.query(query, {
             replacements,
@@ -1440,6 +1451,11 @@ export const getProductOption = async (whereCondition, limit, offset) => {
                 type: Sequelize.QueryTypes.SELECT,
             });
             product.optionProduct = getOptionProductResult;
+            const workedProductOptionResult = await db.query(workedProductOptionQuery, {
+                replacements: { wholesaleProductId: product.wholesaleProductId },
+                type: Sequelize.QueryTypes.SELECT,
+            });
+            product.workedProductOption = workedProductOptionResult;
         });
         return getProductOptionResult;
     } catch (error) {
@@ -1755,8 +1771,6 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
                 : []),
         ];
 
-        console.log('modifiedAttributes********************///////////////////', modifiedAttributes);
-
         const t = await db.transaction();
 
         try {
@@ -1874,6 +1888,7 @@ export const getProductAttribute = async (wholesaleProductId, platformId) => {
         const certificationList = [];
         const selectedAttributes = [];
         const originArea = [];
+        const productInfoProvidedNoticeContents = [];
 
         result.forEach((item) => {
             if (item.attributeTypeCode === 'CERTI') {
@@ -1895,9 +1910,16 @@ export const getProductAttribute = async (wholesaleProductId, platformId) => {
                     attributeValueSeq: item.attributeCode,
                     minAttributeValue: item.attributeValue,
                 });
+            } else if (item.attributeTypeCode === 'PROINFO') {
+                productInfoProvidedNoticeContents.push({
+                    productInfoProvidedNoticeType: item.attributeGroupCode,
+                    productInfoProvidedNoticeTypeName: item.attributeGroupValue,
+                    fieldName: item.attributeCode,
+                    fieldValue: item.attributeValue,
+                });
             }
         });
-        return { certificationList, selectedAttributes, originArea };
+        return { certificationList, selectedAttributes, originArea, productInfoProvidedNoticeContents };
     } catch (error) {
         console.error('Error executing getProductAttribute query:', error);
         throw error;
@@ -1942,7 +1964,7 @@ export const getProductThumbnail = async (wholesaleProductId, flag = 'nomal') =>
         WHERE wholesale_product_id = :wholesaleProductId
     `;
     if (flag === 'upload') {
-        query += ` AND upload_yn != 'Y'`;
+        query += ` AND (upload_yn != 'Y' OR upload_yn IS NULL)`;
     }
     try {
         const result = await db.query(query, {
@@ -1969,7 +1991,7 @@ export const getFinalProductData = async (param) => {
         limit,
         offset,
     };
-    console.log(replacements);
+
     let query = `
         SELECT 
             p.wholesale_product_id as wholesaleProductId,
@@ -2183,7 +2205,6 @@ export const getDeliveryInfo = async (wholesaleSiteId) => {
 
 export const updateProductThumbnail = async (productThumbnail) => {
     const { wholesaleProductId, imgUrl, platformId } = productThumbnail;
-    console.log('productThumbnail', productThumbnail);
     const query = `
         INSERT INTO platform_upload_img (img_url, wholesale_product_id, platform_id)
         VALUES (:imgUrl, :wholesaleProductId, :platformId)
@@ -2198,6 +2219,29 @@ export const updateProductThumbnail = async (productThumbnail) => {
         return result;
     } catch (error) {
         console.error('Error executing updateProductThumbnail query:', error);
+        throw error;
+    }
+};
+
+export const getCommonCode = async (code) => {
+    const query = `
+        SELECT code as code, 
+               parent_code_id as parentCodeId, 
+               code_name as codeName, 
+               description as description, 
+               sort_order as sortOrder, 
+               is_active as isActive, 
+               created_at as createdAt, 
+               updated_at as updatedAt
+        FROM common_code
+        WHERE code = :code
+    `;
+    const replacements = { code };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.SELECT });
+        return result;
+    } catch (error) {
+        console.error('Error executing getCommonCode query:', error);
         throw error;
     }
 };
