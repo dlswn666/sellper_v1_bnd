@@ -12,4 +12,5 @@ router.get('/getNaverProductForProvidedNotice/:categoryId', naverCommerceControl
 router.get('/getNaverCategoryList', naverCommerceController.getNaverCategoryList);
 router.post('/registerNaverProduct', naverCommerceController.registerNaverProduct);
 router.get('/getNaverSellerAddressBook', naverCommerceController.getNaverSellerAddressBook);
+router.get('/getNaverTagInfo/:keyword', naverCommerceController.getNaverTagInfo);
 export default router;

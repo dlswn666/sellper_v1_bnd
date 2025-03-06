@@ -23,6 +23,7 @@ naverSearch.process(async (job) => {
         let searchResult = await searchNaverShopping(data.curValue);
 
         searchResult.id = data.id;
+        searchResult.platform_name = 'naver';
 
         const result = await productModel.putAutoReco(searchResult);
 

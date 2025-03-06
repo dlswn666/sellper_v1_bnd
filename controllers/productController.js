@@ -7,6 +7,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { createUploader, IMAGE_TYPES, handleFileUpload } from '../config/imageUpload.js';
+import { v4 as uuidv4 } from 'uuid';
 
 export const getSelectProductData = async (req, res) => {
     const { search = '', limit = 50, page = 1 } = req.query;
@@ -78,6 +79,7 @@ export const putWorkingData = async (req, res) => {
                                     ((productPrice + margin_price + tax_price + platForm_price) * discountRatio) / 100
                                 ) * 100;
 
+                            // 최종 판매가 100원 단위 올림
                             const price = productPrice + margin_price + tax_price + platForm_price + discount_price;
 
                             const platformId = data.platformInfoId;
@@ -100,6 +102,12 @@ export const putWorkingData = async (req, res) => {
 
                             // 비동기 작업 - 플랫폼 가격 정보 저장
                             await productModel.postPlatformPrice(paramData);
+                            const priceData = {
+                                productsId: productsUuid,
+                                salePrice: price,
+                                discountPrice: discount_price,
+                            };
+                            await productModel.putProductPrice(priceData);
                         } catch (err) {
                             await transaction.rollback();
                             console.error(`Platform ${data.platformInfoId} 가격 계산 실패: `, err);
@@ -173,12 +181,16 @@ export const postSearchWord = async (req, res) => {
 export const searchAutoReco = async (req, res) => {
     const { search = '', limit = 50, page = 1, flag = '' } = req.query;
 
+    let savedDataOffest = req.query.savedDataOffset;
+    let productId = req.query.productId ? req.query.productId : '';
+
     const data = {
         search,
-        offset: (page - 1) * limit,
+        offset: savedDataOffest ? parseInt(savedDataOffest, 10) : (page - 1) * limit,
         limit: parseInt(limit, 10),
         page: parseInt(page, 10),
         flag,
+        productId,
     };
 
     try {
@@ -187,9 +199,11 @@ export const searchAutoReco = async (req, res) => {
         let productsData = await Promise.all(
             searchResult.map(async (product) => {
                 let thumbnail = await productModel.getThumbNailData(product.wholeProductId);
+                let tagInfo = await productModel.getProductTag(product.productId);
                 return {
                     ...product,
                     thumbnail,
+                    tagInfo,
                 };
             })
         );
@@ -237,14 +251,15 @@ export const putProductName = async (req, res) => {
     }
 };
 
-export const putProductTag = async (req, res) => {
+export const postProductTag = async (req, res) => {
     const data = req.body;
     try {
-        const result = await productModel.putProductTag(data);
+        console.log('data****************************', data);
+        const result = await productModel.postProductTag(data);
 
-        res.status(200).json({ result: result, message: '저장이 완료 되었습니다.' });
+        res.status(200).json({ success: true, message: '저장이 완료 되었습니다.' });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 };
 
@@ -296,7 +311,7 @@ export const getProductById = async (req, res) => {
 
 export const getProductPriceData = async (req, res) => {
     try {
-        const { productId, search, limit = 100, offset = 0 } = req.query;
+        const { productId, search, limit = 50, offset = 0 } = req.query;
 
         // productId나 search 둘 다 없어도 전체 데이터를 반환하도록 수정
         let whereCondition = {};
@@ -306,9 +321,7 @@ export const getProductPriceData = async (req, res) => {
         }
 
         if (search) {
-            whereCondition.productName = {
-                [Sequelize.Op.like]: `%${search}%`,
-            };
+            whereCondition.productName = search;
         }
 
         const result = await productModel.getProductPriceData(whereCondition, parseInt(limit), parseInt(offset));
@@ -358,14 +371,16 @@ export const putPlatformPrice = async (req, res) => {
     try {
         const result = await productModel.putPlatformPrice(data);
         if (result) {
-            await productModel.putProductPrice(data);
+            await productModel.putProductPrice(data[0]);
         }
         if (data[0].platformId.trim() === 'naver') {
             const naverProductPoint = await productModel.getNaverProductPoint(data[0].productsId);
             if (naverProductPoint.length > 0) {
                 await productModel.putNaverProductPoint(data[0]);
+                console.log(data[0].naverProductPoint[0]);
             } else {
                 await productModel.postNaverProductPoint(data[0]);
+                console.log(data[0].naverProductPoint[0]);
             }
         }
         res.status(200).json({ result: result, message: 'success' });
@@ -375,7 +390,7 @@ export const putPlatformPrice = async (req, res) => {
 };
 
 export const getProductAttributeData = async (req, res) => {
-    const { productId, search, limit = 100, offset = 0, flag = '' } = req.query;
+    const { productId, search, limit = 50, offset = 0, flag = '' } = req.query;
 
     let whereCondition = {};
 
@@ -384,13 +399,12 @@ export const getProductAttributeData = async (req, res) => {
     }
 
     if (search) {
-        whereCondition.productName = {
-            [Sequelize.Op.like]: `%${search}%`,
-        };
+        whereCondition.productName = search;
     }
 
     try {
         const result = await productModel.getProductAttributeData(whereCondition, parseInt(limit), parseInt(offset));
+        console.log('result', result);
         let productsData = await Promise.all(
             result.map(async (product) => {
                 let thumbnail = await productModel.getThumbNailData(product.wholesaleProductId);
@@ -400,7 +414,6 @@ export const getProductAttributeData = async (req, res) => {
                 };
             })
         );
-        console.log('*******************************************', flag);
         if (flag === 'thumbnail') {
             let uploadThumbnailData = await Promise.all(
                 productsData.map(async (product) => {
@@ -431,7 +444,7 @@ export const getProductDetailImage = async (req, res) => {
 };
 
 export const getProductOption = async (req, res) => {
-    const { productId, limit = 100, offset = 0 } = req.query;
+    const { productId, limit = 50, offset = 0 } = req.query;
 
     let whereCondition = {};
 
@@ -490,7 +503,6 @@ export const getDeliveryCompanies = async (req, res) => {
 export const postProductAttribute = async (req, res) => {
     const data = req.body;
     try {
-        console.log('data', data);
         const result = await productModel.postWholesaleProductAttribute(data);
         res.status(200).json({ success: true, message: '저장이 완료 되었습니다.' });
     } catch (err) {
@@ -498,26 +510,101 @@ export const postProductAttribute = async (req, res) => {
     }
 };
 
-// 이미지 업로드
+//기존 썸네일 변환
+export const convertOldThumbnail = async (req, res) => {
+    const { wholesaleProductId } = req.query;
+    try {
+        // 기존 썸네일 데이터 조회
+        const thumbnails = await productModel.getThumbNailData(wholesaleProductId);
 
+        const uploadResults = await Promise.all(
+            thumbnails.map(async (item) => {
+                try {
+                    // 이미지 URL에서 파일 다운로드
+                    const response = await fetch(item.thumbnailPath);
+                    const buffer = await response.buffer();
+
+                    // 임시 파일 생성
+                    const tempFilePath = path.join('/tmp', `temp-${Date.now()}.jpg`);
+                    await fs.promises.writeFile(tempFilePath, buffer);
+
+                    // 파일 업로드를 위한 설정
+                    const uploader = createUploader({
+                        imageType: IMAGE_TYPES.THUMBNAIL,
+                        fileNamer: (file) =>
+                            `product-${wholesaleProductId}-${Date.now()}${path.extname(file.originalname)}`,
+                    });
+
+                    // 파일 업로드 처리
+                    const uploadedFile = await handleFileUpload(
+                        uploader,
+                        IMAGE_TYPES.THUMBNAIL
+                    )({
+                        file: {
+                            path: tempFilePath,
+                            originalname: path.basename(item.thumbnailPath),
+                        },
+                    });
+
+                    // DB에 새로운 썸네일 정보 저장
+                    await productModel.postProductThumbnail({
+                        wholesaleProductId,
+                        thumbnail: uploadedFile,
+                        imgUploadPlatform: 'naver',
+                    });
+
+                    // 임시 파일 삭제
+                    await fs.promises.unlink(tempFilePath);
+
+                    return uploadedFile;
+                } catch (error) {
+                    console.error(`Error processing thumbnail: ${item.thumbnailPath}`, error);
+                    return null;
+                }
+            })
+        );
+
+        const successfulUploads = uploadResults.filter((result) => result !== null);
+
+        res.status(200).json({
+            success: true,
+            message: `${successfulUploads.length} 개의 썸네일이 변환되었습니다.`,
+            data: successfulUploads,
+        });
+    } catch (err) {
+        console.error('Error in convertOldThumbnail:', err);
+        res.status(500).json({
+            success: false,
+            error: err.message,
+        });
+    }
+};
+
+// 이미지 업로드
 export const postProductThumbnailController = async (req, res) => {
     try {
         const uploader = createUploader({
             imageType: IMAGE_TYPES.THUMBNAIL,
             fileNamer: (file, req) => {
                 let paramWholesaleProductId = req.body?.wholesaleProductId || req.query.wholesaleProductId;
-                paramWholesaleProductId = 'thumbnail';
                 return `product-${paramWholesaleProductId}-${Date.now()}${path.extname(file.originalname)}`;
             },
         });
 
         // 파일 업로드 처리
         const uploadedFiles = await handleFileUpload(uploader, IMAGE_TYPES.THUMBNAIL)(req, res);
+        console.log('uploadedFiles', uploadedFiles);
+
+        const thumbnail = uploadedFiles.map((file) => ({
+            imgId: file.processed.imgId,
+            imgName: file.processed.fileName,
+            imgPath: file.processed.filePath,
+        }));
 
         // DB에 저장
         await productModel.postProductThumbnail({
             wholesaleProductId: req.body.wholesaleProductId,
-            thumbnail: uploadedFiles,
+            thumbnail: thumbnail,
             imgUploadPlatform: 'naver',
         });
 
@@ -537,57 +624,61 @@ export const postProductThumbnailController = async (req, res) => {
 
 // 네이버 이미지 업로드
 export const postNaverProductThumbnail = async (req, res) => {
-    const data = req.body;
-    console.log('data - postNaverProductThumbnail', data);
-    const wholesaleProductId = req.body.wholesaleProductId;
-
+    const { wholesaleProductId } = req.body;
     try {
-        const getProductThumbnailData = await productModel.getProductThumbnail(wholesaleProductId, 'upload');
-        console.log('getProductThumbnailData', getProductThumbnailData);
-        const getThumbnailData = await productModel.getThumbNailData(wholesaleProductId, 'upload');
-        let thumbnailDataArray = [];
-        if (getProductThumbnailData.length > 0 && getThumbnailData.length > 0) {
-            console.log('확인');
-            getProductThumbnailData.forEach((item) => {
-                thumbnailDataArray.push(item.imgPath);
-            });
-            getThumbnailData.forEach((item) => {
-                thumbnailDataArray.push(item.thumbnailPath);
-            });
-            console.log('thumbnailDataArray', thumbnailDataArray);
-            const naverCommerceController = await import('./naverCommerceController.js');
-            const uploadNaverProductImage = await naverCommerceController.uploadNaverProductImage(
-                {
-                    body: {
-                        imageFiles: thumbnailDataArray,
-                    },
-                },
-                {
-                    status: () => {
-                        json: (data) => data;
-                    },
-                }
-            );
+        // 두 소스에서 이미지 데이터 가져오기
+        const [productThumbnailData, thumbnailData] = await Promise.all([
+            productModel.getProductThumbnail(wholesaleProductId, 'upload'),
+            productModel.getThumbNailData(wholesaleProductId, 'upload'),
+        ]);
 
-            const updateData = uploadNaverProductImage.data.images.map((item) => {
-                return {
-                    wholesaleProductId: wholesaleProductId,
+        // 이미지 경로 배열 생성
+        const thumbnailDataArray = [
+            ...productThumbnailData.map((item) => item.imgPath),
+            ...thumbnailData.map((item) => item.thumbnailPath),
+        ];
+
+        if (thumbnailDataArray.length === 0) {
+            return res.status(200).json({
+                success: true,
+                message: '업로드할 이미지가 없습니다.',
+            });
+        }
+
+        const naverCommerceController = await import('./naverCommerceController.js');
+        const uploadResult = await naverCommerceController.uploadNaverProductImage({
+            body: { imageFiles: thumbnailDataArray },
+        });
+
+        if (uploadResult.success && uploadResult.data) {
+            // DB 업데이트를 위한 데이터 준비
+            const updatePromises = uploadResult.data.map((item) => {
+                productModel.updateProductThumbnail({
+                    wholesaleProductId,
                     imgUrl: item.url,
                     platformId: 'naver',
-                };
+                });
             });
-            await Promise.all(
-                updateData.map(async (item) => {
-                    await productModel.updateProductThumbnail(item);
-                })
-            );
-            res.status(200).json({ success: true, message: '업로드가 완료 되었습니다.' });
+
+            productModel.putProductThumbnailUploadYn(wholesaleProductId);
+            productModel.putWholesaleProductThumbnailUploadYn(wholesaleProductId);
+
+            await Promise.all(updatePromises);
+
+            res.status(200).json({
+                success: true,
+                message: '업로드가 완료되었습니다.',
+                count: uploadResult.data.length,
+            });
         } else {
-            res.status(200).json({ success: true, message: '업로드할 이미지가 없습니다.' });
+            throw new Error('이미지 업로드 결과가 올바르지 않습니다.');
         }
     } catch (err) {
-        res.status(500).json({ error: err.message });
-        console.error('Error in postNaverProductThumbnail controller:', err);
+        console.error('Error in postNaverProductThumbnail:', err);
+        res.status(500).json({
+            success: false,
+            error: err.message,
+        });
     }
 };
 
@@ -610,7 +701,7 @@ export const getFinalProductData = async (req, res) => {
 
         // 파라미터 유효성 검사 및 기본값 설정
         const params = {
-            limit: parseInt(limit) || 100,
+            limit: parseInt(limit) || 50,
             page: parseInt(page) || 1,
             productId: productId || '',
             searchTerm: searchTerm || '',
@@ -626,6 +717,7 @@ export const getFinalProductData = async (req, res) => {
                 const platformProductPrice = {};
                 const platformProductOption = {};
                 const platformProductAttribute = {};
+                let platformProductNaverPoint = {};
                 await Promise.all(
                     platformIds.map(async (platformId) => {
                         const category = await productModel.getProductCategory(product.productId, platformId);
@@ -645,8 +737,8 @@ export const getFinalProductData = async (req, res) => {
                 // 옵션 가격 조회는 all 한번 더 조회
                 const allOption = await productModel.getProductPlatformOption(product.productId, 'all');
                 platformProductOption.all = allOption;
-
-                const platformProductNaverPoint = await productModel.getProductNaverPoint(product.productId);
+                const naverProductPoint = await productModel.getProductNaverPoint(product.productId);
+                platformProductNaverPoint = naverProductPoint;
                 const platformProductDeliveryInfo = await productModel.getDeliveryInfo(product.wholesaleSiteId);
 
                 return {
@@ -665,5 +757,88 @@ export const getFinalProductData = async (req, res) => {
     } catch (error) {
         console.error('Error in getFinalProductData controller:', error);
         res.status(500).json({ error: error.message });
+    }
+};
+
+// 썸네일 삭제
+export const deleteProductThumbnail = async (req, res) => {
+    const { imgId } = req.query;
+    try {
+        // 이미지 정보 먼저 조회
+        const imageInfo = await productModel.getImageInfoById(imgId);
+
+        if (imageInfo && imageInfo.imgPath) {
+            // 실제 파일 경로 구성
+            const filePath = path.join(process.cwd(), 'public', imageInfo.imgPath);
+            console.log('filePath', filePath);
+            // 파일이 존재하는지 확인 후 삭제
+            if (fs.existsSync(filePath)) {
+                await fs.promises.unlink(filePath);
+            }
+        }
+
+        // DB에서 썸네일 정보 삭제
+        const result = await productModel.deleteProductThumbnail(imgId);
+        res.status(200).json({ success: true, message: '이미지가 성공적으로 삭제되었습니다.' });
+    } catch (err) {
+        console.error('Error in deleteProductThumbnail:', err);
+        res.status(500).json({
+            success: false,
+            message: '이미지 삭제 중 오류가 발생했습니다.',
+            error: err.message,
+        });
+    }
+};
+
+// 상품 상태 업데이트
+export const putProductStage = async (req, res) => {
+    const param = req.body;
+    try {
+        const result = await productModel.putProductStage(param);
+        res.status(200).json({ success: true, message: 'success' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// 태그 저장
+export const putProductTag = async (req, res) => {
+    const { productId, tag } = req.body;
+
+    try {
+        await productModel.deleteProductTag(productId);
+        const tagData = tag.map((item) => item.text).join(' ');
+        console.log('tagData', tagData);
+        const data = {
+            productId: productId,
+            tag: tagData,
+        };
+        await productModel.postProductTag(data);
+
+        tag.map(async (item) => {
+            const tagId = uuidv4();
+            const result = await productModel.putProductTag(productId, tagId, item.text, item.code);
+        });
+        res.status(200).json({ success: true, message: '태그가 저장되었습니다.' });
+    } catch (err) {
+        console.error('Error in putProductTag:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// 상품 삭제
+export const deleteProduct = async (req, res) => {
+    const data = req.body; // params나 body에서 productId 가져오기
+
+    if (!data) {
+        return res.status(400).json({ success: false, message: 'productId is required' });
+    }
+
+    try {
+        const result = await productModel.deleteProduct(data);
+        res.status(200).json({ success: true, message: '상품이 삭제되었습니다.' });
+    } catch (err) {
+        console.error('Error in deleteProduct:', err);
+        res.status(500).json({ success: false, error: err.message });
     }
 };

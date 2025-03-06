@@ -28,6 +28,7 @@
         "puppeteer-extra": "^3.3.6",
         "puppeteer-extra-plugin-stealth": "^2.11.2",
         "sequelize": "^6.37.3",
+        "sharp": "^0.33.5",
         "user-agents": "^1.1.315",
         "uuid": "^10.0.0",
         "xml2js": "^0.6.2"

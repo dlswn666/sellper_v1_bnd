@@ -4,11 +4,19 @@ import tokenManager from '../utils/tokenManager.js';
 import dotenv from 'dotenv';
 import { postNaverCategory, getNaverCategoryModel } from '../models/naverCommerceModels.js';
 import { createBaseInfo } from '../dao/naver/shopping/product/originProduct/originProduct.js';
-import { getDetailImageData, getUploadThumbnail, getCommonCode } from '../models/productModel.js';
+import {
+    getDetailImageData,
+    getUploadThumbnail,
+    getCommonCode,
+    putProductTag,
+    getProductTag,
+} from '../models/productModel.js';
 import path from 'path';
 import fs from 'fs';
 import FormData from 'form-data';
 import { Blob } from 'buffer';
+import { imageProcessing } from '../config/imageUpload.js';
+import sharp from 'sharp';
 
 dotenv.config();
 
@@ -191,6 +199,32 @@ export const getNaverCategory = async (req, res) => {
     }
 };
 
+export const getNaverTagInfo = async (req, res) => {
+    try {
+        const keyword = req.params.keyword;
+        if (!keyword) {
+            return res.status(400).json({ error: 'Keyword is required' });
+        }
+
+        const response = await executeWithTokenRetry(async (token) => {
+            return await axios.get(
+                `${process.env.NAVER_API_BASE_URL}/external/v2/tags/recommend-tags?keyword=${keyword}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+        });
+
+        res.status(200).json(response.data);
+    } catch (error) {
+        console.error('Naver tag info error', error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
 // 상품정보제공고시 상품군 목록 조회
 //https://api.commerce.naver.com/external/v1/products-for-provided-notice
 //"path": "/external/v1/products-for-provided-notice?categoryId=SOME_STRING_VALUE",
@@ -254,78 +288,151 @@ export const getNaverCategoryList = async (req, res) => {
     }
 };
 
-// 상품 이미지 업로드
+const optimizeImageForNaver = async (buffer) => {
+    try {
+        const maxSize = 9900000; // 9.9MB
+        const targetWidth = 1000;
+        const targetHeight = 1000;
+        let optimizedBuffer = buffer;
+
+        // 먼저 1000x1000으로 리사이즈
+        optimizedBuffer = await sharp(buffer)
+            .resize(targetWidth, targetHeight, {
+                fit: 'inside',
+                withoutEnlargement: false,
+            })
+            .toBuffer();
+
+        // 용량이 여전히 크다면 품질을 조절하며 압축 시도
+        if (optimizedBuffer.length > maxSize) {
+            let quality = 80; // 초기 품질
+
+            while (optimizedBuffer.length > maxSize && quality >= 20) {
+                console.log(`압축 시도: 품질 ${quality}%, 현재 크기: ${optimizedBuffer.length} bytes`);
+
+                optimizedBuffer = await sharp(optimizedBuffer)
+                    .jpeg({
+                        quality,
+                        progressive: true,
+                        force: true,
+                        chromaSubsampling: '4:2:0',
+                    })
+                    .toBuffer();
+
+                // 품질을 점진적으로 낮춤
+                quality -= 5;
+            }
+        }
+
+        // 최종 이미지 메타데이터 확인 및 로깅
+        const finalMetadata = await sharp(optimizedBuffer).metadata();
+        console.log('최종 이미지 정보:', {
+            width: finalMetadata.width,
+            height: finalMetadata.height,
+            size: optimizedBuffer.length,
+            format: finalMetadata.format,
+        });
+
+        return optimizedBuffer;
+    } catch (error) {
+        console.error('이미지 최적화 중 오류 발생:', error);
+        throw error;
+    }
+};
+
 export const uploadNaverProductImage = async (req) => {
     try {
         const { imageFiles } = req.body;
-        if (!imageFiles || !Array.isArray(imageFiles)) {
+        if (!imageFiles) {
             throw new Error('이미지 파일이 필요합니다.');
         }
 
-        // 이미지 파일 경로 처리 및 버퍼 변환
-        const imagePromises = imageFiles.map(async (imagePath) => {
+        const maxBatchSize = 9900000; // 9.9MB (네이버 API 제한)
+        const imageFileArray = Array.isArray(imageFiles) ? imageFiles : [imageFiles];
+        const results = [];
+        let currentBatch = [];
+        let currentBatchSize = 0;
+
+        // 이미지 파일들을 순회하며 배치 구성
+        for (let i = 0; i < imageFileArray.length; i++) {
             try {
                 let fullPath;
-                if (imagePath.startsWith('C:')) {
-                    fullPath = imagePath;
+                if (imageFileArray[i].startsWith('C:')) {
+                    fullPath = imageFileArray[i];
                 } else {
-                    fullPath = path.join(process.cwd(), imagePath.replace(/^\//, ''));
+                    fullPath = path.join(process.cwd(), imageFileArray[i].replace(/^\//, ''));
                 }
 
                 if (!fs.existsSync(fullPath)) {
                     console.error(`파일이 존재하지 않습니다: ${fullPath}`);
-                    return null;
+                    continue;
                 }
 
-                // Buffer로 직접 반환
                 const buffer = await fs.promises.readFile(fullPath);
-                return {
+                const fileSize = buffer.length;
+
+                // 현재 배치에 추가했을 때 크기 초과하면 현재 배치 먼저 업로드
+                if (currentBatchSize + fileSize > maxBatchSize) {
+                    if (currentBatch.length > 0) {
+                        const uploadResult = await uploadImageBatch(currentBatch);
+                        results.push(...uploadResult);
+                    }
+                    currentBatch = [];
+                    currentBatchSize = 0;
+                }
+
+                currentBatch.push({
                     buffer,
-                    filename: path.basename(imagePath),
-                };
+                    filename: path.basename(imageFileArray[i]),
+                });
+                currentBatchSize += fileSize;
             } catch (error) {
-                console.error(`이미지 처리 중 오류 발생: ${imagePath}`, error);
-                return null;
+                console.error(`이미지 처리 중 오류 발생: ${imageFileArray[i]}`, error);
             }
-        });
-
-        const imageBuffers = (await Promise.all(imagePromises)).filter((img) => img !== null);
-
-        if (imageBuffers.length === 0) {
-            throw new Error('처리 가능한 이미지가 없습니다.');
         }
 
-        const formData = new FormData();
-        imageBuffers.forEach(({ buffer, filename }) => {
-            // Buffer를 직접 FormData에 추가
-            formData.append('imageFiles', buffer, {
-                filename,
-                contentType: 'image/jpeg', // 또는 적절한 MIME 타입
-            });
-        });
+        // 마지막 배치 업로드
+        if (currentBatch.length > 0) {
+            const uploadResult = await uploadImageBatch(currentBatch);
+            results.push(...uploadResult);
+        }
 
-        const response = await executeWithTokenRetry(async (token) => {
-            return await axios.post(
-                `${process.env.NAVER_API_BASE_URL}${process.env.NAVER_API_VERSION}/product-images/upload`,
-                formData,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        ...formData.getHeaders(),
-                    },
-                }
-            );
-        });
+        console.log(`총 처리된 이미지 수: ${results.length}`);
 
         return {
             success: true,
             message: '이미지가 성공적으로 업로드되었습니다.',
-            data: response.data,
+            data: results,
         };
     } catch (error) {
         console.error('네이버 상품 이미지 업로드 에러:', error);
         throw error;
     }
+};
+
+const uploadImageBatch = async (imageBatch) => {
+    const formData = new FormData();
+    imageBatch.forEach(({ buffer, filename }) => {
+        formData.append('imageFiles', buffer, {
+            filename,
+            contentType: 'image/jpeg',
+        });
+    });
+
+    const response = await executeWithTokenRetry(async (token) => {
+        return await axios.post(
+            `${process.env.NAVER_API_BASE_URL}${process.env.NAVER_API_VERSION}/product-images/upload`,
+            formData,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    ...formData.getHeaders(),
+                },
+            }
+        );
+    });
+
+    return response.data.images || [];
 };
 
 // 판매자 주소록 조회
@@ -376,7 +483,9 @@ export const registerNaverProduct = async (req, res) => {
     try {
         const productData = req.body;
         let paramData = await createNaverProduct(productData);
+        console.log('paramData', paramData.platformTag);
         paramData = JSON.stringify(paramData);
+        console.log('paramData', paramData);
         const response = await executeWithTokenRetry(async (token) => {
             return await axios.post(`https://api.commerce.naver.com/external/v2/products`, paramData, {
                 headers: {
@@ -418,7 +527,7 @@ const createNaverProduct = async (productData) => {
     const detailContent = createDetailContent(detailImage);
     const images = await createImages(productData.wholesaleProductId);
     const deliveryInfo = createDeliveryInfo(productData.platformProductDeliveryInfo);
-    const detailAttributes = createDetailAttributes(productData);
+    const detailAttributes = await createDetailAttributes(productData);
     const customerBenefit = createCustomerBenefit(productData);
 
     const naverProductData = {
@@ -538,7 +647,7 @@ const createClaimDeliveryInfo = (deliveryData) => {
     return claimDeliveryInfo;
 };
 
-const createDetailAttributes = (productData) => {
+const createDetailAttributes = async (productData) => {
     const platformAttributes = productData.platformProductAttribute.naver;
     const certificateList = platformAttributes.certificationList;
     const originArea = platformAttributes.originArea;
@@ -571,18 +680,19 @@ const createDetailAttributes = (productData) => {
     const certificationTargetExcludeContent = null;
     const sellerCommentContent = null;
     const sellerCommentUsable = false;
-    const minorPurchasable = false;
+    const minorPurchasable = true;
     const ecoupon = null;
 
     const productInfoProvidedNotice = createProductInfoProvidedNotice(
         productData.platformProductAttribute.naver.productInfoProvidedNoticeContents
     );
     const productAttributes = createProductAttributes(productData.platformProductAttribute.naver.selectedAttributes);
+    console.log('productAttributes****************************', productAttributes);
     const cultureCostIncomeDeductionYn = null;
     const customProductYn = null;
     const itselfProductionProductYn = null;
     const brandCertificationYn = null;
-    const seoInfo = createSeoInfo();
+    const seoInfo = await createSeoInfo(productData.productId);
     const productSize = null;
 
     const detailAttributes = {
@@ -621,24 +731,33 @@ const createDetailAttributes = (productData) => {
     return detailAttributes;
 };
 
-const createSeoInfo = () => {
+const createSeoInfo = async (productId) => {
+    const result = await getProductTag(productId);
+    const productTag = result.map((item) => {
+        return {
+            code: item.code,
+            text: item.text,
+        };
+    });
+    console.log('productTag****************************', productTag);
+
     const seoInfo = {
         pageTitle: '',
         metaDescription: '',
-        sellerTags: [{ text: '', code: '' }],
+        sellerTags: productTag,
     };
     return seoInfo;
 };
 
 const createNaverShoppingSearchInfo = () => {
-    //const manufacturerName = await getCommonCode('manufacturer');
     const manufacturerName = '인영상회 협력사';
+    const brandName = '인영상회 협력사';
     const naverShoppingSearchInfo = {
         modelId: null,
         modelName: '',
         manufacturerName: manufacturerName,
         brandId: null,
-        brandName: '',
+        brandName: brandName,
     };
     return naverShoppingSearchInfo;
 };
@@ -687,31 +806,35 @@ const createOptionInfo = (optionData) => {
     };
 
     // 네이버 옵션 데이터 처리
-    if (optionData.naver && optionData.naver.length > 0) {
-        const optionType = optionData.naver[0].optionType;
+    const optionsToUse = optionData.naver && optionData.naver.length > 0 ? optionData.naver : optionData.all;
+    if (optionsToUse && optionsToUse.length > 0) {
+        const optionType = optionsToUse[0].optionType;
+        console.log('optionType****************************', optionType);
 
-        if (optionType === 'standard') {
-            const standardOption = createStandardOption(optionData.naver);
+        if (optionType === 'single') {
+            const simpleOption = createSimpleOption(optionsToUse);
             optionInfo = {
                 ...optionInfo,
-                standardOptionGroups: standardOption.standardOptionGroups,
-                optionStandards: standardOption.optionStandards,
+                simpleOptionSortType: 'ABC',
+                optionSimple: simpleOption,
             };
         } else if (optionType === 'combination') {
-            const combinationOption = createCombinationOption(optionData.naver);
+            const combinationOption = createCombinationOption(optionsToUse);
+            console.log('combinationOption****************************', combinationOption);
             optionInfo = {
                 ...optionInfo,
-                optionCombinationSortType: 'CREATE',
+                optionCombinationSortType: 'ABC',
                 optionCombinationGroupNames: combinationOption.optionCombinationGroupNames,
                 optionCombinations: combinationOption.optionCombinations,
             };
         }
     }
+    console.log('optionInfo****************************', optionInfo);
     return optionInfo;
 };
 
 // 단독형 옵션 생성
-const createStandardOption = (optionData) => {
+const createSimpleOption = (optionData) => {
     // 옵션 그룹명 추출 (중복 제거)
     const optionNameSet = new Set();
     optionData.forEach((item) => {
@@ -780,11 +903,11 @@ const createCombinationOption = (optionData) => {
     // optionCombinations 생성
     const optionCombinations = optionData.map((option, index) => {
         const optionValues = option.optionValue.split('/');
-
+        console.log('option****************************', option);
         return {
-            id: index + 1,
-            stockQuantity: option.stockQuantity || 0,
-            price: option.price || 0,
+            id: '',
+            stockQuantity: option.optionStock || 0,
+            price: option.optionPrice || 0,
             usable: true,
             optionName1: optionValues[0] || '',
             optionName2: optionValues[1] || '',
@@ -811,13 +934,14 @@ const createProductCertificationInfos = (productCertificationInfosList) => {
         certificationDate,
      */
     let productCertificationInfos = [];
+    console.log('productCertificationInfosList****************************', productCertificationInfosList);
     productCertificationInfosList.map((item) => {
-        console.log('item****************', item);
         const certificationInfoType = 'ETC';
         const companyName = '';
+        console.log('item****************************', item);
         productCertificationInfos.push({
-            certificationInfoId: item.certificationInfoId,
-            certificationKindType: certificationInfoType,
+            certificationInfoId: item.certInfo,
+            certificationKindType: 'KC_CERTIFICATION',
             name: item.agency,
             certificationNumber: item.number,
             certificationMark: false,
@@ -1283,13 +1407,15 @@ const createPurchaseQuantityInfo = (productData) => {
 const createProductAttributes = (productAttributesList) => {
     const productAttributes = [];
     productAttributesList.map((item) => {
+        console.log('item****************************', item);
         productAttributes.push({
             attributeSeq: parseInt(item.attributeSeq),
-            attributeValueSeq: parseInt(item.attributeValueSeq),
-            attributeRealValue: item.minAttributeValue,
-            attributeRealValueUnitCode: item.minAttributeValue,
+            attributeValueSeq: parseInt(item.attributeValueSeq || '0'),
+            attributeRealValue: item.unitcode ? item.minAttributeValue : '',
+            attributeRealValueUnitCode: item.unitcode,
         });
     });
+    console.log('productAttributes****************************', productAttributes);
     return productAttributes;
 };
 

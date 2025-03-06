@@ -131,7 +131,7 @@ export const getSearchWordData = async (data) => {
         let condition = '';
 
         if (search) {
-            condition += ` WHERE wp.product_name LIKE :productName`;
+            condition += ` AND wp.product_name LIKE :productName`;
             replacements.productName = `%${search}%`;
         }
         replacements.offset = parseInt(offset, 10);
@@ -155,6 +155,8 @@ export const getSearchWordData = async (data) => {
                 ON wp.wholesale_product_id = p.wholesale_product_id
             left outer join wholesale_site_info wsi
                 on wp.wholesale_site_id = wsi.wholesale_site_id  
+            WHERE 1 = 1
+            AND p.stage != 'up'
             ${condition}
             ORDER BY 
                 CASE 
@@ -448,7 +450,8 @@ export const putAutoReco = async (data) => {
 };
 
 export const getAutoReco = async (data) => {
-    const { search, limit, offset, flag } = data;
+    const { search, limit, offset, flag, productId } = data;
+    console.log(data);
     try {
         // 기본 쿼리 조립
         let query = [
@@ -489,8 +492,26 @@ export const getAutoReco = async (data) => {
                     MAX(CASE WHEN platform_name = 'C' THEN reco_cate END) AS C_recoCate
                 FROM auto_recommend
                 GROUP BY product_id
-             ) AS recoCate ON ar.product_id = recoCate.product_id`,
+             ) AS recoCate ON ar.product_id = recoCate.product_id 
+             WHERE 1=1
+             AND p.product_id is not null
+             AND p.stage != 'up'
+             `,
         ];
+        if (flag === 'tag') {
+            query.push(`AND p.product_name IS NOT NULL`);
+        } else if (flag === 'cate') {
+            query.push(`AND p.product_name IS NOT NULL`);
+            query.push(`AND p.platform_tag IS NOT NULL`);
+        }
+
+        if (productId) {
+            query.push(`AND p.product_id = :productId`);
+        }
+
+        if (search) {
+            query.push(`AND p.product_name LIKE (% '${search}%' )`);
+        }
 
         // 조건부 쿼리문 추가
         const queryCondition = (flag) => {
@@ -506,7 +527,6 @@ export const getAutoReco = async (data) => {
                     `;
                 case 'tag':
                     return `
-                        WHERE p.product_name IS NOT NULL
                         ORDER BY 
                             CASE 
                                 WHEN p.platform_tag IS NOT NULL AND p.platform_tag != '' THEN 1
@@ -516,8 +536,6 @@ export const getAutoReco = async (data) => {
                     `;
                 case 'cate':
                     return `
-                        WHERE p.product_name IS NOT NULL
-                        AND p.platform_tag IS NOT NULL
                         ORDER BY wp.product_name ASC
                         LIMIT :limit OFFSET :offset
                     `;
@@ -536,10 +554,14 @@ export const getAutoReco = async (data) => {
         const finalQuery = query.join(' ');
 
         // 쿼리 실행
-        const replacements = {
+        let replacements = {
             limit,
             offset,
+            search,
         };
+        if (productId) {
+            replacements.productId = productId;
+        }
         const result = await db.query(finalQuery, {
             replacements,
             type: Sequelize.QueryTypes.SELECT,
@@ -589,6 +611,7 @@ export const putProductName = async (data) => {
 
 export const getCateProduct = async (data) => {
     const { search = '', limit, offset, platformId } = data;
+
     try {
         let query = `
             SELECT 
@@ -609,6 +632,7 @@ export const getCateProduct = async (data) => {
                 recoCate.B_recoCate,
                 recoCate.C_recoCate,
                 recoCate.product_id AS recoProductId,
+                ppc2.naver_category_id AS naverCategoryId,
                 GROUP_CONCAT(
                     IF(naver_cate.category_no1 IS NOT NULL AND naver_cate.category_no1 != '', naver_cate.category_no1, ''),
                     IF(naver_cate.category_no2 IS NOT NULL AND naver_cate.category_no2 != '', CONCAT(' > ', naver_cate.category_no2), ''),
@@ -665,16 +689,20 @@ export const getCateProduct = async (data) => {
                 ON ppc.gmarket_category_id = gmarket_cate.category_id
             LEFT OUTER JOIN platform_category elevenst_cate
                 ON ppc.elevenst_category_id = elevenst_cate.category_id 
+            LEFT OUTER JOIN processed_product_category ppc2
+                ON ppc2.product_id = p.product_id
             WHERE p.product_name IS NOT NULL 
                 AND p.platform_tag IS NOT NULL
+                AND p.stage != 'up'
+
         `;
 
         if (search !== '') {
-            query += ` AND p.product_name LIKE CONCAT('%', :search, '%')`;
+            query += ` AND p.product_name LIKE ('%${search}%')`;
         }
 
-        query += ` GROUP BY p.product_id, wp.wholesale_site_id, wp.product_code, wp.product_price, wp.product_name, wp.detail_page_url, wp.out_of_stock, wp.last_updated, wsi.site_name, recoCate.naver_recoCate, recoCate.B_recoCate, recoCate.C_recoCate`;
-        query += ` ORDER BY CASE WHEN recoProductId IS NOT NULL THEN 1 ELSE 0 END ASC`;
+        query += ` GROUP BY p.product_id, wp.wholesale_site_id, wp.product_code, wp.product_price, wp.product_name, wp.detail_page_url, wp.out_of_stock, wp.last_updated, wsi.site_name, recoCate.naver_recoCate, recoCate.B_recoCate, recoCate.C_recoCate, ppc2.naver_category_id`;
+        query += ` ORDER BY CASE WHEN ppc2.naver_category_id IS NOT NULL THEN 1 ELSE 0 END ASC`;
         query += ` LIMIT :limit OFFSET :offset`;
 
         const replacements = {
@@ -696,9 +724,9 @@ export const getCateProduct = async (data) => {
     }
 };
 
-export const putProductTag = async (data) => {
-    const { productId, productTag } = data;
-
+export const postProductTag = async (data) => {
+    const { productId, tag } = data;
+    console.log('productTag****************************', tag);
     try {
         let query = `
             UPDATE selper.products 
@@ -709,7 +737,7 @@ export const putProductTag = async (data) => {
         `;
 
         const replacements = {
-            productTag,
+            productTag: tag,
             productId,
         };
 
@@ -1015,6 +1043,7 @@ export const getProductPriceData = async (whereCondition, limit, offset) => {
             p.product_name AS productName,
             p.platform_tag AS platformTag,
             p.product_price AS productPrice,
+            p.stage AS stage,
             wp.wholesale_site_id AS siteId,
             wp.product_code AS productCode,
             CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
@@ -1026,6 +1055,23 @@ export const getProductPriceData = async (whereCondition, limit, offset) => {
             recoCate.naver_recoCate,
             recoCate.B_recoCate,
             recoCate.C_recoCate,
+            (
+                SELECT COUNT(*)
+                    FROM products p_inner
+                    LEFT OUTER JOIN processed_product_category ppc_inner ON p_inner.product_id = ppc_inner.product_id
+                    LEFT OUTER JOIN platform_category naver_cate_inner ON ppc_inner.naver_category_id = naver_cate_inner.category_id
+                    LEFT OUTER JOIN platform_category coupang_cate_inner ON ppc_inner.coupang_category_id = coupang_cate_inner.category_id
+                    LEFT OUTER JOIN platform_category gmarket_cate_inner ON ppc_inner.gmarket_category_id = gmarket_cate_inner.category_id
+                    LEFT OUTER JOIN platform_category elevenst_cate_inner ON ppc_inner.elevenst_category_id = elevenst_cate_inner.category_id
+                    WHERE p_inner.product_name IS NOT NULL 
+                    AND p_inner.platform_tag IS NOT NULL
+                    AND (
+                        naver_cate_inner.category_no1 IS NOT NULL 
+                        OR coupang_cate_inner.category_no1 IS NOT NULL 
+                        OR gmarket_cate_inner.category_no1 IS NOT NULL 
+                        OR elevenst_cate_inner.category_no1 IS NOT NULL
+                    )
+            ) AS total_count,
             (
                 SELECT COUNT(*)
                 FROM products p_inner
@@ -1094,23 +1140,28 @@ export const getProductPriceData = async (whereCondition, limit, offset) => {
         LEFT OUTER JOIN platform_category elevenst_cate ON ppc.elevenst_category_id = elevenst_cate.category_id 
         WHERE p.product_name IS NOT NULL 
             AND p.platform_tag IS NOT NULL
-        GROUP BY p.product_id
-        HAVING 
-            naverCategory IS NOT NULL OR 
-            coupangCategory IS NOT NULL OR 
-            gmarketCategory IS NOT NULL OR 
-            elevenstCategory IS NOT NULL
-        ORDER BY CASE WHEN p.product_price IS NULL THEN 0 ELSE 1 END`;
+            AND p.stage != 'up'
+        `;
     let replacements = {};
 
+    console.log(whereCondition);
     if (whereCondition.productName) {
-        checkQuery += ` AND p.product_name = :search`;
-        replacements.search = whereCondition.productName;
+        const search = whereCondition.productName.trim();
+        checkQuery += ` AND p.product_name LIKE :search`;
+        replacements.search = `%${search}%`;
     }
+
     if (whereCondition.productId) {
         checkQuery += ` AND p.product_id = :productId`;
-        replacements.productId = whereCondition.productId;
+        replacements.productId = whereCondition.productId.trim();
     }
+    checkQuery += ` GROUP BY p.product_id
+                    HAVING 
+                    naverCategory IS NOT NULL OR 
+                    coupangCategory IS NOT NULL OR 
+            gmarketCategory IS NOT NULL OR 
+            elevenstCategory IS NOT NULL
+        ORDER BY CASE WHEN p.stage != 'OP' THEN 0 ELSE 1 END`;
     checkQuery += ` LIMIT :limit OFFSET :offset`;
     replacements.limit = limit;
     replacements.offset = offset;
@@ -1211,7 +1262,7 @@ export const putPlatformPrice = async (data) => {
 };
 
 export const putProductPrice = async (data) => {
-    const { productsId, salePrice, discountPrice } = data[0];
+    const { productsId, salePrice, discountPrice } = data;
     const replacements = {
         productId: productsId,
         price: salePrice,
@@ -1221,6 +1272,7 @@ export const putProductPrice = async (data) => {
         UPDATE products
         SET product_price = :price,
             discount_charge = :discountPrice,
+            stage = 'OP',
             update_dt = CURRENT_TIMESTAMP
         WHERE product_id = :productId
     `;
@@ -1246,6 +1298,7 @@ export const getProductAttributeData = async (whereCondition, limit, offset) => 
             p.product_name AS productName,
             p.platform_tag AS platformTag,
             p.product_price as productPrice,
+            wpaj.wpaWholesaleProductId as wpaWholesaleProductId,
             wp.wholesale_site_id AS siteId,
             wp.product_code AS productCode,
             CONCAT(FORMAT(wp.product_price, 0), ' 원') AS wholeProductPrice,
@@ -1260,6 +1313,7 @@ export const getProductAttributeData = async (whereCondition, limit, offset) => 
             recoCate.B_recoCate_id,
             recoCate.C_recoCate,
             recoCate.C_recoCate_id,
+            naver_cate.category_num as naverCategoryNum,
             (
                 SELECT COUNT(*)
                 FROM products p_inner
@@ -1276,6 +1330,7 @@ export const getProductAttributeData = async (whereCondition, limit, offset) => 
                         OR gmarket_cate_inner.category_no1 IS NOT NULL 
                         OR elevenst_cate_inner.category_no1 IS NOT NULL
                     )
+                    AND p_inner.stage != 'up'
             ) AS total_count,
             GROUP_CONCAT(
                 IF(naver_cate.category_no1 IS NOT NULL AND naver_cate.category_no1 != '', naver_cate.category_no1, ''),
@@ -1329,34 +1384,48 @@ export const getProductAttributeData = async (whereCondition, limit, offset) => 
         LEFT OUTER JOIN platform_category coupang_cate ON ppc.coupang_category_id = coupang_cate.category_id
         LEFT OUTER JOIN platform_category gmarket_cate ON ppc.gmarket_category_id = gmarket_cate.category_id
         LEFT OUTER JOIN platform_category elevenst_cate ON ppc.elevenst_category_id = elevenst_cate.category_id 
+        LEFT OUTER JOIN (
+            SELECT DISTINCT wholesale_product_id AS wpaWholesaleProductId
+            FROM wholesesale_product_attribute wpa
+        ) wpaj ON wpaj.wpaWholesaleProductId = wp.wholesale_product_id 
         WHERE p.product_name IS NOT NULL 
             AND p.platform_tag IS NOT null
             AND p.product_price IS NOT NULL
-        GROUP BY p.product_id
+            AND p.stage != 'up'
+    `;
+    if (whereCondition.productId) {
+        query += ` AND p.product_id = :productId`;
+        replacements.productId = whereCondition.productId.trim();
+    }
+    if (whereCondition.productName) {
+        query += ` AND p.product_name LIKE :search`;
+        replacements.search = `%${whereCondition.productName.trim()}%`;
+    }
+
+    query += ` GROUP BY p.product_id, naver_cate.category_num
         HAVING 
             naverCategory IS NOT NULL OR 
             coupangCategory IS NOT NULL OR 
             gmarketCategory IS NOT NULL OR 
             elevenstCategory IS NOT NULL
+        ORDER BY CASE WHEN wpaWholesaleProductId IS NULL THEN 0 ELSE 1 END
     `;
-    if (whereCondition.productId) {
-        query += ` AND p.product_id = :productId`;
-        replacements.productId = whereCondition.productId;
-    }
-    if (whereCondition.productName) {
-        query += ` AND p.product_name = :search`;
-        replacements.search = whereCondition.productName;
-    }
 
     query += ` LIMIT :limit OFFSET :offset`;
     replacements.limit = limit;
     replacements.offset = offset;
+
+    const totalCountQuery = `SELECT COUNT(*) FROM products WHERE product_name IS NOT NULL AND platform_tag IS NOT NULL AND product_price IS NOT NULL AND stage != 'up'`;
 
     try {
         const result = await db.query(query, {
             replacements,
             type: Sequelize.QueryTypes.SELECT,
         });
+        const totalCount = await db.query(totalCountQuery, {
+            type: Sequelize.QueryTypes.SELECT,
+        });
+        result.totalCount = totalCount[0].count;
         return result;
     } catch (error) {
         console.error('Error executing getProductPrice query:', error);
@@ -1370,9 +1439,11 @@ export const getProductDetailImage = async (wholesaleProductId) => {
             dtl_img_id as detailImageId,
             wholesale_product_id as wholesaleProductId,
             dtl_img_url as detailImageUrl,
-            path as path
+            path as path,
+            img_order as imgOrder
         FROM wholesale_product_dtl_img
         WHERE wholesale_product_id = :wholesaleProductId
+        ORDER BY img_order ASC
     `;
     try {
         const result = await db.query(query, {
@@ -1398,15 +1469,20 @@ export const getProductOption = async (whereCondition, limit, offset) => {
             p.product_name as productName, 
             p.product_price as productPrice,
             p.discount_charge as discountCharge,
-            wp.detail_page_url as detailPageUrl 
+            wp.detail_page_url as detailPageUrl, 
+            ppos.productId as pposProductId
         from products p
         left outer join wholesale_product_options wpo 
         on p.wholesale_product_id = wpo.wholesale_product_id 
         left outer join wholesale_product wp 
         on p.wholesale_product_id = wp.wholesale_product_id 
-        where 1 = 1 and 
-        p.product_price is not null
-        and p.product_name is not null
+        left outer join (
+            select distinct ppo.products_id AS productId
+            from platform_product_options ppo
+        ) as ppos
+        on p.product_id = ppos.productId
+        where 1 = 1 
+        and p.stage = 'OP'
         and wpo.option_id is not null
     `;
 
@@ -1414,6 +1490,8 @@ export const getProductOption = async (whereCondition, limit, offset) => {
         query += ` AND p.product_id = :productId`;
         replacements.productId = whereCondition.productId;
     }
+
+    query += ` ORDER BY CASE WHEN ppos.productId IS NULL THEN 0 ELSE 1 END`;
 
     query += ` LIMIT :limit OFFSET :offset`;
 
@@ -1538,7 +1616,8 @@ export const postOptionSettings = async (optionSettingsArray) => {
                 option_price,
                 option_stock,
                 create_user,
-                create_dt
+                create_dt,
+                option_index
             )
             VALUES
             (
@@ -1552,7 +1631,8 @@ export const postOptionSettings = async (optionSettingsArray) => {
                 :optionPrice,
                 :optionStock,
                 :createUser,
-                CURRENT_TIMESTAMP
+                CURRENT_TIMESTAMP,
+                :optionIndex
             )
         `;
 
@@ -1573,8 +1653,8 @@ export const postOptionSettings = async (optionSettingsArray) => {
     }
 };
 
-export const putProductStage = async (productStage) => {
-    const { productId, stage } = productStage;
+export const putProductStage = async (data) => {
+    const { productId, stage } = data;
     const replacements = {
         productId: productId,
         stage: stage,
@@ -1710,6 +1790,7 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
                           attributeGroupValue: '기타-직접 입력',
                           attributeCode: originArea.originNation,
                           attributeValue: originArea.originArea,
+                          unitcode: '',
                           platformId: 'naver',
                       },
                   ]
@@ -1728,6 +1809,7 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
                           attributeGroupValue: certification.certInfoName,
                           attributeCode: certification.agency,
                           attributeValue: certification.number,
+                          unitcode: '',
                           platformId: 'naver',
                       }))
                 : []),
@@ -1735,22 +1817,19 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
             // 상품 속성 - selectedAttributes가 존재하고 배열인 경우만 매핑
             ...(Array.isArray(selectedAttributes) && selectedAttributes.length > 0
                 ? selectedAttributes
-                      .filter(
-                          (attr) =>
-                              attr.attributeSeq &&
-                              attr.attributeName &&
-                              attr.attributeValueSeq &&
-                              attr.minAttributeValue
-                      )
+                      .filter((attr) => attr.attributeSeq)
                       .map((selectedAttribute) => ({
                           attributeId: uuid4(),
                           wholesaleProductId,
                           attributeType: '상품속성',
                           attributeTypeCode: 'PROATT',
-                          attributeGroupCode: selectedAttribute.attributeSeq,
-                          attributeGroupValue: selectedAttribute.attributeName,
-                          attributeCode: selectedAttribute.attributeValueSeq,
-                          attributeValue: selectedAttribute.minAttributeValue,
+                          attributeGroupCode: selectedAttribute.attributeSeq ? selectedAttribute.attributeSeq : '',
+                          attributeGroupValue: selectedAttribute.attributeName ? selectedAttribute.attributeName : '',
+                          attributeCode: selectedAttribute.attributeValueSeq ? selectedAttribute.attributeValueSeq : '',
+                          attributeValue: selectedAttribute.minAttributeValue
+                              ? selectedAttribute.minAttributeValue
+                              : '',
+                          unitcode: selectedAttribute.unit ? selectedAttribute.unit : '',
                           platformId: 'naver',
                       }))
                 : []),
@@ -1766,6 +1845,7 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
                           attributeGroupValue: productInfoProvidedNoticeContent.productInfoProvidedNoticeTypeName,
                           attributeCode: productInfoProvidedNoticeContent.fieldName,
                           attributeValue: productInfoProvidedNoticeContent.fieldValue,
+                          unitcode: '',
                           platformId: 'naver',
                       }))
                 : []),
@@ -1775,19 +1855,8 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
 
         try {
             const validAttributes = modifiedAttributes.filter(
-                (attr) =>
-                    attr.attributeId &&
-                    attr.wholesaleProductId &&
-                    attr.attributeType &&
-                    attr.attributeTypeCode &&
-                    attr.attributeGroupCode &&
-                    attr.attributeGroupValue &&
-                    attr.attributeCode &&
-                    attr.attributeValue &&
-                    attr.platformId
+                (attr) => attr.attributeId && attr.wholesaleProductId && attr.attributeType && attr.platformId
             );
-
-            console.log('Valid attributes after filtering:', validAttributes);
 
             if (validAttributes.length > 0) {
                 const deleteQuery = `
@@ -1809,7 +1878,10 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
                         attribute_group_value,
                         attribute_code,
                         attribute_value,
-                        platform_id
+                        platform_id,
+                        unitcode,
+                        create_date,
+                        create_user
                     ) VALUES (
                         :attributeId,
                         :wholesaleProductId,
@@ -1819,11 +1891,16 @@ export const postWholesaleProductAttribute = async (wholesaleProductAttribute) =
                         :attributeGroupValue,
                         :attributeCode,
                         :attributeValue,
-                        :platformId
+                        :platformId,
+                        :unitcode,
+                        CURRENT_TIMESTAMP,
+                        :createUser 
                     )
                 `;
+                const createUser = 'system';
 
                 for (const attribute of validAttributes) {
+                    attribute.createUser = createUser;
                     try {
                         await db.query(insertQuery, {
                             replacements: attribute,
@@ -1873,6 +1950,7 @@ export const getProductAttribute = async (wholesaleProductId, platformId) => {
                 attribute_group_value as attributeGroupValue,
                 attribute_code as attributeCode,
                 attribute_value as attributeValue,
+                unitcode as unitcode,
                 platform_id as platformId
             FROM wholesesale_product_attribute WHERE wholesale_product_id = :wholesaleProductId
         `;
@@ -1909,6 +1987,7 @@ export const getProductAttribute = async (wholesaleProductId, platformId) => {
                     attributeName: item.attributeGroupValue,
                     attributeValueSeq: item.attributeCode,
                     minAttributeValue: item.attributeValue,
+                    unitcode: item.unitcode,
                 });
             } else if (item.attributeTypeCode === 'PROINFO') {
                 productInfoProvidedNoticeContents.push({
@@ -1928,6 +2007,7 @@ export const getProductAttribute = async (wholesaleProductId, platformId) => {
 
 export const postProductThumbnail = async (productThumbnail) => {
     const { wholesaleProductId, thumbnail, imgUploadPlatform = 'naver' } = productThumbnail;
+    console.log('thumbnail', thumbnail);
     const query = `
     INSERT INTO selper.platform_thumbnail
     (platform_thumbnail_id, wholesale_product_id, img_name, img_path, img_upload_platform)
@@ -1936,11 +2016,12 @@ export const postProductThumbnail = async (productThumbnail) => {
     try {
         const result = await Promise.all(
             thumbnail.map(async (item) => {
+                console.log('item', item);
                 const replacements = {
-                    platformThumbnailId: uuid4(),
+                    platformThumbnailId: item.imgId,
                     wholesaleProductId,
-                    imgName: item.fileName,
-                    imgPath: item.filePath,
+                    imgName: item.imgName,
+                    imgPath: item.imgPath,
                     imgUploadPlatform,
                 };
                 const insertResult = await db.query(query, { replacements, type: Sequelize.QueryTypes.INSERT });
@@ -1957,6 +2038,7 @@ export const postProductThumbnail = async (productThumbnail) => {
 export const getProductThumbnail = async (wholesaleProductId, flag = 'nomal') => {
     let query = `
         SELECT wholesale_product_id as wholesaleProductId,
+               platform_thumbnail_id as platformThumbnailId,
                img_name as imgName,
                img_path as imgPath,
                img_upload_platform as imgUploadPlatform
@@ -2002,6 +2084,7 @@ export const getFinalProductData = async (param) => {
             p.platform_keyword as platformKeyword,
             p.platform_tag as platformTag,
             p.discount_charge as discountCharge,
+            p.stage as stage,
             wp.product_code as productCode,
             wp.wholesale_site_id as wholesaleSiteId,
             wp.product_price as wholesaleProductPrice,
@@ -2012,9 +2095,13 @@ export const getFinalProductData = async (param) => {
             ON p.wholesale_product_id = wp.wholesale_product_id 
         LEFT OUTER JOIN wholesale_site_info wsi 
             ON wp.wholesale_site_id = wsi.wholesale_site_id 
+        LEFT OUTER JOIN (
+        	SELECT DISTINCT wholesale_product_id as uploadProductId from platform_upload_img pui 
+        ) puii on puii.uploadProductId = p.wholesale_product_id  
         WHERE 1=1
         AND p.product_name IS NOT NULL
         AND p.product_price IS NOT NULL
+        AND p.stage != 'up'
     `;
 
     if (productId) {
@@ -2024,6 +2111,10 @@ export const getFinalProductData = async (param) => {
     if (searchTerm) {
         query += ` AND p.product_name LIKE :searchTerm`;
     }
+
+    query += `  ORDER BY CASE WHEN p.stage = 'up' THEN 1 ELSE 0 END, p.product_name ASC`;
+
+    console.log('query****************************', query);
 
     query += ` LIMIT :limit OFFSET :offset`;
 
@@ -2115,6 +2206,7 @@ export const getProductPlatformOption = async (productId, platformId) => {
         FROM platform_product_options ppo 
         WHERE products_id = :productId
         AND platform = :platformId
+        ORDER BY option_index ASC
     `;
     const replacements = { productId, platformId };
     try {
@@ -2242,6 +2334,120 @@ export const getCommonCode = async (code) => {
         return result;
     } catch (error) {
         console.error('Error executing getCommonCode query:', error);
+        throw error;
+    }
+};
+
+export const deleteProductThumbnail = async (imgId) => {
+    const query = `DELETE FROM platform_thumbnail WHERE platform_thumbnail_id = :imgId`;
+    const replacements = { imgId };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.DELETE });
+        return result;
+    } catch (error) {
+        console.error('Error executing deleteProductThumbnail query:', error);
+        throw error;
+    }
+};
+
+export const getImageInfoById = async (imgId) => {
+    const query = `SELECT img_path as imgPath FROM platform_thumbnail WHERE platform_thumbnail_id = :imgId`;
+    const replacements = { imgId };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.SELECT });
+        return result;
+    } catch (error) {
+        console.error('Error executing getImageInfoById query:', error);
+        throw error;
+    }
+};
+
+/**
+ * create table naver_tag_info (
+	tag_id varchar(36) primary key comment '태그 정보',
+	product_id varchar(36) comment '상품 id',
+	tag_text varchar(50) comment '태그 텍스트',
+	tag_code int comment '태그 코드'
+);
+ * @param {*} productId 
+ * @param {*} tag 
+ * @returns 
+ */
+
+export const putProductTag = async (productId, tagId, text, code) => {
+    // productId로 삭제 후 저장
+    console.log('text', text);
+    console.log('code', code);
+    const query = `INSERT INTO naver_tag_info (tag_id, product_id, tag_text, tag_code) VALUES (:tagId, :productId, :text, :code)`;
+    const replacements = { tagId, productId, text, code };
+
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.INSERT });
+        return result;
+    } catch (error) {
+        console.error('Error executing putProductTag query:', error);
+        throw error;
+    }
+};
+
+export const deleteProductTag = async (productId) => {
+    const query = `DELETE FROM naver_tag_info WHERE product_id = :productId`;
+    const replacements = { productId };
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.DELETE });
+        return result;
+    } catch (error) {
+        console.error('Error executing deleteProductTag query:', error);
+        throw error;
+    }
+};
+
+export const getProductTag = async (productId) => {
+    const query = `SELECT tag_id as tagId, 
+                    product_id as productId, 
+                    tag_text as text, 
+                    tag_code as code 
+                    FROM naver_tag_info WHERE product_id = :productId`;
+    const replacements = { productId };
+
+    try {
+        const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.SELECT });
+        return result;
+    } catch (error) {
+        console.error('Error executing getProductTag query:', error);
+        throw error;
+    }
+};
+
+export const putProductThumbnailUploadYn = async (wholesaleProductId) => {
+    const query = `UPDATE platform_thumbnail SET upload_yn = 'Y' WHERE wholesale_product_id = :wholesaleProductId`;
+    const replacements = { wholesaleProductId };
+    const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.UPDATE });
+    return result;
+};
+
+export const putWholesaleProductThumbnailUploadYn = async (wholesaleProductId) => {
+    const query = `UPDATE wholesale_product_thumbnail SET upload_yn = 'Y' WHERE wholesale_product_id = :wholesaleProductId`;
+    const replacements = { wholesaleProductId };
+    const result = await db.query(query, { replacements, type: Sequelize.QueryTypes.UPDATE });
+    return result;
+};
+
+export const deleteProduct = async (data) => {
+    const { productId } = data;
+    const query = `DELETE FROM products WHERE product_id = :productId`;
+    const query2 = `DELETE FROM naver_point_info WHERE product_id = :productId`;
+    const query3 = `DELETE FROM platform_product_options WHERE products_id = :productId`;
+    const transaction = await db.transaction();
+    try {
+        await db.query(query, { replacements: { productId }, type: Sequelize.QueryTypes.DELETE, transaction });
+        await db.query(query2, { replacements: { productId }, type: Sequelize.QueryTypes.DELETE, transaction });
+        await db.query(query3, { replacements: { productId }, type: Sequelize.QueryTypes.DELETE, transaction });
+        await transaction.commit();
+        return true;
+    } catch (error) {
+        console.error('Error executing deleteProduct query:', error);
+        await transaction.rollback();
         throw error;
     }
 };

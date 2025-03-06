@@ -10,7 +10,7 @@ router.get('/getWorkingData', productController.getProductData);
 router.post('/postSearchWord', productController.postSearchWord);
 router.get('/getAutoReco', productController.searchAutoReco);
 router.put('/putProductName', productController.putProductName);
-router.put('/putProductTag', productController.putProductTag);
+router.post('/postProductTag', productController.postProductTag);
 router.post('/postProcessCategory', productController.postProcessCategory);
 router.get('/getCategory', productController.getCategory);
 router.get('/getCateProduct', productController.getCateProduct);
@@ -30,5 +30,9 @@ router.post('/postProductThumbnail', productController.postProductThumbnailContr
 router.get('/getProductThumbnail', productController.getProductThumbnail);
 router.get('/getFinalProductData', productController.getFinalProductData);
 router.post('/postNaverProductThumbnail', productController.postNaverProductThumbnail);
+router.delete('/deleteProductThumbnail', productController.deleteProductThumbnail);
+router.put('/putProductStage', productController.putProductStage);
+router.put('/putProductTag', productController.putProductTag);
+router.delete('/deleteProduct', productController.deleteProduct);
 
 export default router;

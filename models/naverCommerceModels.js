@@ -58,3 +58,63 @@ export const getNaverCategoryModel = async (categoryNum) => {
 
     return result;
 };
+
+export const getNaverCommerceData = async (query, page = 1, limit = 10) => {
+    try {
+        const offset = (page - 1) * limit;
+
+        // 데이터 조회 쿼리
+        const [rows] = await db.query(
+            `SELECT * FROM naver_commerce_data 
+       WHERE query = ? 
+       ORDER BY id DESC 
+       LIMIT ? OFFSET ?`,
+            [query, limit, offset]
+        );
+
+        // 전체 개수 조회 쿼리 추가
+        const [totalRows] = await db.query(
+            `SELECT COUNT(*) as total FROM naver_commerce_data 
+       WHERE query = ?`,
+            [query]
+        );
+
+        return {
+            data: rows,
+            total: totalRows[0].total,
+        };
+    } catch (error) {
+        console.error('Error in getNaverCommerceData:', error);
+        throw error;
+    }
+};
+
+export const getNaverCommerceDataByDate = async (startDate, endDate, page = 1, limit = 10) => {
+    try {
+        const offset = (page - 1) * limit;
+
+        // 데이터 조회 쿼리
+        const [rows] = await db.query(
+            `SELECT * FROM naver_commerce_data 
+       WHERE created_at BETWEEN ? AND ? 
+       ORDER BY id DESC 
+       LIMIT ? OFFSET ?`,
+            [startDate, endDate, limit, offset]
+        );
+
+        // 전체 개수 조회 쿼리 추가
+        const [totalRows] = await db.query(
+            `SELECT COUNT(*) as total FROM naver_commerce_data 
+       WHERE created_at BETWEEN ? AND ?`,
+            [startDate, endDate]
+        );
+
+        return {
+            data: rows,
+            total: totalRows[0].total,
+        };
+    } catch (error) {
+        console.error('Error in getNaverCommerceDataByDate:', error);
+        throw error;
+    }
+};
