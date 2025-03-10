@@ -2451,3 +2451,40 @@ export const deleteProduct = async (data) => {
         throw error;
     }
 };
+
+// 이미지 파일명으로 이미지 정보 조회
+export const getImageByFileName = async (fileName) => {
+    try {
+        // 썸네일 테이블에서 파일명으로 이미지 검색
+        const query = `
+            SELECT 
+                img_id as imgId,
+                img_name as imgName,
+                img_path as imgPath,
+                img_size as imgSize,
+                img_upload_platform as imgUploadPlatform
+            FROM platform_thumbnail
+            WHERE img_name = :fileName
+            UNION
+            SELECT 
+                img_id as imgId,
+                img_name as imgName,
+                img_path as imgPath,
+                img_size as imgSize,
+                img_upload_platform as imgUploadPlatform
+            FROM wholesale_product_thumbnail
+            WHERE img_name = :fileName
+            LIMIT 1
+        `;
+
+        const result = await db.one(query, { fileName });
+        return result;
+    } catch (error) {
+        if (error.code === '23502') {
+            // 데이터가 없는 경우
+            return null;
+        }
+        console.error('getImageByFileName 에러:', error);
+        throw error;
+    }
+};

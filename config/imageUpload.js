@@ -3,6 +3,11 @@ import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
 import { v4 as uuid4 } from 'uuid';
+import nasClient from '../utils/nasClient.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
 const UPLOAD_BASE_DIR = 'images';
 const IMAGE_TYPES = {
     THUMBNAIL: 'thumbnail',
@@ -13,6 +18,9 @@ const IMAGE_TYPES = {
     CATEGORY: 'category',
     ETC: 'etc',
 };
+
+// NAS 저장소 사용 여부
+const useNasStorage = process.env.NAS_STORAGE_ENABLED === 'true';
 
 // 이미지 타입별 경로 생성 함수
 const createImagePath = (imageType) => {
@@ -187,7 +195,7 @@ const getRandomProcessingOptions = () => {
     };
 };
 
-// 파일 업로드 핸들러 수정
+// 파일 업로드 핸들러 수정 - NAS 서버 지원 추가
 export const handleFileUpload = (uploader, imageType = IMAGE_TYPES.THUMBNAIL) => {
     return async (req, res) => {
         const tempFiles = []; // 삭제할 임시 파일들의 경로를 저장
@@ -234,48 +242,81 @@ export const handleFileUpload = (uploader, imageType = IMAGE_TYPES.THUMBNAIL) =>
                     await sharp(buffer).toFile(processedFilePath);
 
                     const uuid = uuid4();
+                    let filePath = `/${UPLOAD_BASE_DIR}/${imageType}/${processedFileName}`;
+
+                    // NAS 서버를 사용하는 경우, 처리된 이미지를 NAS 서버에 업로드
+                    if (useNasStorage) {
+                        try {
+                            // NAS 서버에 업로드
+                            const nasFileData = await nasClient.uploadFile(
+                                processedFilePath,
+                                `${imageType}/${processedFileName}`
+                            );
+
+                            // NAS 서버 URL로 경로 업데이트
+                            if (nasFileData && nasFileData.url) {
+                                filePath = nasFileData.url;
+                            }
+
+                            console.log(`파일 ${processedFileName}이 NAS 서버에 업로드되었습니다: ${filePath}`);
+                        } catch (error) {
+                            console.error(`NAS 서버 업로드 실패: ${error.message}`);
+                            // NAS 업로드 실패 시 로컬 경로 유지
+                        }
+                    }
 
                     return {
                         processed: {
                             imgId: uuid,
                             fileName: processedFileName,
                             originalName: file.originalname,
-                            filePath: `/${UPLOAD_BASE_DIR}/${imageType}/${processedFileName}`,
+                            filePath: filePath,
                             fileSize: buffer.length,
                             mimeType: file.mimetype,
                             processingOptions,
+                            isNasStorage: useNasStorage,
                         },
                     };
                 })
             );
 
-            // 임시 파일들 삭제
-            await Promise.all(
-                tempFiles.map(async (filePath) => {
-                    try {
-                        await fs.promises.unlink(filePath);
-                    } catch (err) {
-                        console.error(`임시 파일 삭제 실패: ${filePath}`, err);
-                    }
-                })
-            );
+            // 임시 파일 삭제
+            for (const tempFile of tempFiles) {
+                fs.promises.unlink(tempFile).catch((err) => {
+                    console.error(`임시 파일 ${tempFile} 삭제 실패:`, err);
+                });
+            }
 
             return uploadedFiles;
         } catch (error) {
-            // 에러 발생 시에도 임시 파일 삭제 시도
-            await Promise.all(
-                tempFiles.map(async (filePath) => {
-                    try {
-                        await fs.promises.unlink(filePath);
-                    } catch (err) {
-                        console.error(`임시 파일 삭제 실패: ${filePath}`, err);
-                    }
-                })
-            );
+            // 오류 발생 시 임시 파일 정리
+            for (const tempFile of tempFiles) {
+                fs.promises.unlink(tempFile).catch(() => {});
+            }
             throw error;
         }
     };
 };
 
-// 이미지 타입 상수 export
-export { IMAGE_TYPES, imageProcessing };
+// 파일 다운로드 핸들러 추가
+export const handleFileDownload = async (filePath, downloadPath) => {
+    if (!useNasStorage || !filePath.includes('://')) {
+        // 로컬 파일 복사
+        const localFilePath = filePath.startsWith('/')
+            ? path.join(process.cwd(), filePath.substring(1))
+            : path.join(process.cwd(), filePath);
+
+        if (fs.existsSync(localFilePath)) {
+            return fs.promises.copyFile(localFilePath, downloadPath);
+        } else {
+            throw new Error(`로컬 파일이 존재하지 않습니다: ${localFilePath}`);
+        }
+    } else {
+        // NAS 서버에서 파일명 추출
+        const fileName = path.basename(filePath);
+        // NAS 서버에서 다운로드
+        return nasClient.downloadFile(fileName, downloadPath);
+    }
+};
+
+export { IMAGE_TYPES };

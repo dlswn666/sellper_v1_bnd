@@ -6,7 +6,7 @@ import { postProductThumbnail } from '../models/productModel.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { createUploader, IMAGE_TYPES, handleFileUpload } from '../config/imageUpload.js';
+import { createUploader, IMAGE_TYPES, handleFileUpload, handleFileDownload } from '../config/imageUpload.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export const getSelectProductData = async (req, res) => {
@@ -840,5 +840,50 @@ export const deleteProduct = async (req, res) => {
     } catch (err) {
         console.error('Error in deleteProduct:', err);
         res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// 이미지 다운로드 컨트롤러 추가
+export const getImageController = async (req, res) => {
+    try {
+        const { filename } = req.params;
+
+        // 이미지 타입 확인 (경로에서 추출)
+        const fileParts = filename.split('-');
+        const imageType = fileParts[0] || IMAGE_TYPES.THUMBNAIL;
+
+        // 이미지 정보 조회
+        const imageData = await productModel.getImageByFileName(filename);
+
+        if (!imageData) {
+            return res.status(404).json({
+                success: false,
+                message: '요청한 이미지를 찾을 수 없습니다.',
+            });
+        }
+
+        // 임시 경로 생성
+        const tempFilePath = path.join('/tmp', `download-${Date.now()}-${filename}`);
+
+        // 파일 다운로드 처리 (NAS 서버 또는 로컬 파일 시스템)
+        await handleFileDownload(imageData.imgPath, tempFilePath);
+
+        // 파일 전송
+        res.sendFile(tempFilePath, (err) => {
+            if (err) {
+                console.error('이미지 전송 오류:', err);
+            }
+
+            // 임시 파일 정리
+            fs.promises.unlink(tempFilePath).catch((err) => {
+                console.error('임시 파일 삭제 오류:', err);
+            });
+        });
+    } catch (error) {
+        console.error('이미지 다운로드 오류:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || '이미지 다운로드 중 오류가 발생했습니다.',
+        });
     }
 };

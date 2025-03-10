@@ -35,4 +35,7 @@ router.put('/putProductStage', productController.putProductStage);
 router.put('/putProductTag', productController.putProductTag);
 router.delete('/deleteProduct', productController.deleteProduct);
 
+// 추가: 이미지 다운로드 라우트
+router.get('/image/:filename', productController.getImageController);
+
 export default router;
